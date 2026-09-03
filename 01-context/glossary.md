@@ -14,7 +14,6 @@
 4. This document defines **what a term means**, not how it is stored or structured.
    Attributes, cardinalities, and allowed enumeration values belong to the data model and the
    domain rules, not here.
----
 
 ## Domain terms — Identity and access
 
@@ -152,4 +151,3 @@
 | W | Watt — unit of active power |
 
 ---
-
