@@ -140,7 +140,19 @@ touching who is allowed to log in.
                     ┌──────────┐            ┌────────────────┐
                     │  Alerts  │            │ Recommendations│
                     └──────────┘            └────────────────┘
+                         ▲
+                         │  Kafka: DeviceConnectivityLost
+                         │
+                  ┌────────────┐
+                  │   Devices  │
+                  └────────────┘
 ```
+
+> This diagram only draws the relationships that involve an active integration (an API call, a
+> token claim, or a domain event). `Alert` and `Recommendation` also store `homeId` and, where
+> applicable, `deviceId` as plain foreign references — Home Management and Devices are not called
+> at write time for this, and no arrow is drawn for it. The full list, including these
+> reference-only relationships, is in the table below.
 
 ### Context relationship types
 
@@ -162,8 +174,12 @@ relationships — there is no legacy system to protect against, and no two conte
 | Security | OHS / PL | Monitoring and Measurements | REST | Access token claims (user identity) |
 | Home Management | U → D | Devices | REST | `homeId` as a foreign reference, not a shared entity |
 | Devices | U → D | Monitoring and Measurements | MQTT + REST | `deviceId` validated through its `apiKey` before a measurement is accepted |
-| Monitoring and Measurements | U → D | Alerts | Domain event (name and payload to be defined in `domain-events.md`) | Not yet defined |
-| Monitoring and Measurements | U → D | Recommendations | Domain event (name and payload to be defined in `domain-events.md`) | Not yet defined |
+| Monitoring and Measurements | U → D | Alerts | Kafka (`MeasurementRecorded`, topic `monitoring.measurement-recorded`) | See `domain-events.md` |
+| Monitoring and Measurements | U → D | Recommendations | Kafka (`MeasurementRecorded`, topic `monitoring.measurement-recorded`) | See `domain-events.md` |
+| Devices | U → D | Alerts | Kafka (`DeviceConnectivityLost`, topic `devices.device-connectivity-lost`) | See `domain-events.md` |
+| Home Management | U → D | Alerts | REST | `homeId` as a foreign reference, not a shared entity |
+| Home Management | U → D | Recommendations | REST | `homeId` as a foreign reference, not a shared entity |
+| Devices | U → D | Recommendations | REST | `deviceId` as a foreign reference, not a shared entity |
 
 No context reads another context's database tables directly, even though the physical database
 is shared. Every relationship above goes through an API call, a token claim, or a domain event.
