@@ -881,43 +881,8 @@ CREATE TABLE recommendation (
 
 ## Migration strategy
 
-**Tool:** Liquibase, in a repository separate from service code, with changelogs organized
-per bounded context (see `Database migrations repository` in `01-context/scope.md`).
-
-**Migration rules:**
-
-```
-✓ Migrations are ALWAYS forward-only
-✓ One migration (changeset) per logical change
-✗ Never modify a changeset already executed in any environment
-✗ Never DROP COLUMN / DROP TABLE if code in production still uses it
-    (process: 1-deprecate in code → 2-cleanup migration in the next release)
-```
-
-**Compatible schema changes (non-breaking):**
-
-```sql
--- Add nullable column → always safe
-ALTER TABLE home ADD COLUMN notes TEXT;
-
--- Add NOT NULL column with DEFAULT → safe if the default is valid
-ALTER TABLE device ADD COLUMN firmware_version VARCHAR(20) NOT NULL DEFAULT 'unknown';
-
--- Create a new index → safe
-CREATE INDEX idx_measurement_device_id ON measurement (device_id);
-```
-
-**Incompatible changes (require a 2-phase migration):**
-
-```sql
--- Rename column → 2 phases:
--- Phase 1 (release N): add the new column, copy data, update code to use both
-ALTER TABLE alert ADD COLUMN severity VARCHAR(20);
-UPDATE alert SET severity = ...;
-
--- Phase 2 (release N+1): remove the old column, once no code reads it anymore
-ALTER TABLE alert DROP COLUMN old_column;
-```
+Migration tooling, rules, and rollback policy are not repeated here — see
+`06-data/migration-strategy.md`.
 
 ---
 
@@ -926,5 +891,7 @@ ALTER TABLE alert DROP COLUMN old_column;
 - Domain entities that map to these tables → `02-domain/entities-and-rules.md`
 - Bounded contexts and cross-context relationships → `02-domain/domain-map.md`
 - Domain events that also touch this data → `02-domain/domain-events.md`
+- Naming, ID format, and other conventions → `06-data/modeling-conventions.md`
+- How schema changes are rolled out → `06-data/migration-strategy.md`
 - Shared-database decision, once formalized → `05-architecture/decisions/records/ADR-003-shared-database.md`
 - Service ownership per table → `09-microservices/service-catalog.md`
