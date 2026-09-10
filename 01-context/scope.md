@@ -98,7 +98,7 @@ Energy Monitor.
 
 | Dependency | Team / Provider | Required date | Status |
 |-----------|----------------|--------------|--------|
-| Database migrations repository (Liquibase, with per-domain changelogs) | Internal, separate repo | Needed before any service connects to a real schema | 🟡 In progress |
+| Database migrations repositories (Liquibase, one repository per domain, each restricted to its own tables) | Internal, separate repos | Needed before any service connects to a real schema | 🟡 In progress |
 | PZEM-004T V3 hardware units | Internal procurement | September 15, 2026 | 🟡 In progress |
 
 ---
