@@ -4,9 +4,12 @@
 
 ## Tool
 
-**Liquibase**, kept separate from each service's own application code. Whether that means one
-shared migrations repository with changelogs organized per domain, or one separate repository per
-domain, is a decision still pending — not assumed here.
+**Liquibase**, kept separate from each service's own application code. **One repository per
+domain** — `security`, `home`, `devices`, `measurements`, `alerts`, `recommendations` each have
+their own changelogs and changesets. A domain's repository may only define or alter that domain's
+own tables, even though every domain's tables live in the same physical MySQL instance. This
+mirrors the rule in `06-data/modeling-conventions.md`: a domain never reaches into another
+domain's tables, whether through a foreign key, a query, or now a migration.
 
 ## Migration rules
 
