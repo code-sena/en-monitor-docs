@@ -4,8 +4,6 @@
 
 ## Data modeling principles
 
-### 1. Shared database, bounded by service ownership
-
 This project does **not** follow a database-per-service model. It uses **one physical MySQL
 instance, organized logically by bounded context** — a deliberate architectural decision (see
 `Shared Database` in `01-context/glossary.md`), to be formalized in `ADR-003-shared-database.md`
@@ -35,40 +33,14 @@ Two reasons:
    `Database migrations repository` decision in `01-context/scope.md` (one repository, with
    per-domain changelogs).
 
-Foreign keys **within** the same bounded context (for example `users.person_id` inside Security)
+Foreign keys **within** the same bounded context (for example `user.person_id` inside Security)
 are declared as real constraints, since both tables are always migrated together by the same
 service.
 
-### 2. Standard audit fields
+Naming, primary key format, timestamps, soft delete, auditing, units, and enum handling are not
+repeated here — they are defined once in `06-data/modeling-conventions.md` and apply to every
+table below without exception.
 
-All tables include:
-
-```sql
-created_at  TIMESTAMP  NOT NULL  DEFAULT CURRENT_TIMESTAMP,
-updated_at  TIMESTAMP  NOT NULL  DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-deleted_at  TIMESTAMP            -- NULL = active (soft delete)
-```
-
-Primary keys in this project are not auto-generated UUIDs — they are `VARCHAR(10)` business
-identifiers (`id_user`, `id_home`, `id_device`, etc.), consistent with
-`02-domain/entities-and-rules.md`. Timestamps use MySQL's `TIMESTAMP` type, not `TIMESTAMPTZ`
-(which PostgreSQL supports but MySQL does not) — the engine stores and converts these based on the
-server's configured time zone.
-
-### 3. Soft delete by default
-
-Do not delete records with a physical `DELETE`. Use `deleted_at IS NOT NULL` to mark as deleted.
-This facilitates auditing and recovery.
-
-### 4. Naming conventions
-
-```sql
--- Tables:      snake_case, singular            → home, user_session, device_status_log
--- Columns:     snake_case, descriptive         → active_power, installation_date
--- PKs:         id_[entity]                     → id_user, id_home, id_device
--- FKs:         [referenced_entity]_id          → user_id, home_id, device_id
--- Enums:       native MySQL ENUM(...)          → status ENUM('ACTIVE','INACTIVE','BLOCKED')
-```
 
 ---
 
