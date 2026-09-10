@@ -37,6 +37,11 @@ the same bounded context (e.g. `user.person_id` inside Security) are real constr
 reasoning is in `06-data/models.md`, section "Data modeling principles" — this file states the
 rule, that file explains why.
 
+This boundary is enforced one level up as well: each domain has its own Liquibase repository, and
+that repository may only define or alter tables belonging to its own domain (see
+`06-data/migration-strategy.md`). A domain never gains write access to another domain's schema,
+even temporarily during a migration.
+
 ## Table and column naming
 
 ```
