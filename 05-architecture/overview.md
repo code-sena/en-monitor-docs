@@ -1,184 +1,165 @@
 # System Architecture Overview
 
-> **What to fill in here:** The architectural view is the technical snapshot of the system.
-> It includes the C4 system and container diagram, service list, and architectural principles.
-> This document is created after the main ADRs and guides the implementation.
-
 ---
 
-## 1. Adopted architectural style
+## Architecture diagram
 
-**Style:** [Microservices / Microservices + Event-Driven / Modular Monolith / etc.]
-
-**Justification:** [Why this style for this project and these requirements]
-
-**Reference ADR:** [`ADR-001-architectural-style.md`](decisions/records/)
-
----
-
-## 2. C4 Diagram — System Level (Context)
-
-> Shows how the system fits in the world. External actors and external systems.
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        System [Name]                                │
-│                                                                     │
-│  ┌─────────────┐    ┌─────────────┐    ┌────────────────────────┐  │
-│  │ [Service A] │    │ [Service B] │    │ [Service C]            │  │
-│  │             │    │             │    │                        │  │
-│  │ Port: 3001  │    │ Port: 3002  │    │ Port: 3003             │  │
-│  └──────┬──────┘    └──────┬──────┘    └──────────┬─────────────┘  │
-│         │                  │                       │                │
-│         └──────────────────┴───────────────────────┘                │
-│                            │ Message Bus                             │
-└────────────────────────────│────────────────────────────────────────┘
-                             │
-                  ┌──────────┴──────────┐
-                  │                     │
-         ┌────────▼──────┐    ┌─────────▼──────┐
-         │ API Gateway   │    │ Admin Dashboard │
-         │               │    │                 │
-         └────────┬──────┘    └─────────────────┘
-                  │
-         ┌────────▼──────────────┐
-         │    External clients   │
-         │  (Web, Mobile, API)   │
-         └───────────────────────┘
-```
-
----
-
-## 3. C4 Diagram — Container Level
-
-> Shows the processes, databases, and main communication channels.
-
-```
-Replace this block with the project-specific diagram.
-
-Recommended tools:
-- PlantUML (see 08-uml/diagrams/source/)
-- Mermaid (natively supported on GitHub)
-- draw.io / Lucidchart
-```
-
-**Mermaid example:**
+### C4 Level 1 — System Context
 
 ```mermaid
-graph TB
-  subgraph "System [Name]"
-    GW[API Gateway<br/>:8080]
-    SA[Service A<br/>:3001]
-    SB[Service B<br/>:3002]
-    BUS[(Message Bus<br/>Kafka/RabbitMQ)]
-    DBA[(Service A DB<br/>PostgreSQL)]
-    DBB[(Service B DB<br/>MongoDB)]
-  end
+C4Context
+    Person(owner, "Home Owner", "Registers a home, devices, and thresholds")
+    Person(member, "Home Member", "Consults consumption, alerts, recommendations")
+    System(energyMonitor, "Energy Monitor", "Attributes electricity consumption to specific appliances and moments in time")
+    System_Ext(measuringDevice, "Measuring device", "ESP32 + PZEM-004T V3, installed on an electrical load")
+    System_Ext(pushProvider, "Push notification provider", "Not yet chosen — see Open questions below")
 
-  WEB[Web App] --> GW
-  MOB[Mobile] --> GW
-  GW --> SA
-  GW --> SB
-  SA --> DBA
-  SB --> DBB
-  SA --> BUS
-  BUS --> SB
+    Rel(owner, energyMonitor, "Manages home, devices, thresholds")
+    Rel(member, energyMonitor, "Consults history, alerts, recommendations")
+    Rel(measuringDevice, energyMonitor, "Publishes readings", "MQTT")
+    Rel(energyMonitor, pushProvider, "Sends push notifications for alerts/recommendations")
 ```
 
----
+### C4 Level 2 — Containers
 
-## 4. Service catalog
+```mermaid
+C4Container
+    Person(owner, "Home Owner / Home Member")
+    System_Ext(measuringDevice, "Measuring device", "ESP32 + PZEM-004T V3")
 
-| # | Service | Responsibility | Port | DB | Communication type |
-|---|---------|---------------|------|-----|-------------------|
-| 1 | [api-gateway] | Routing, auth, rate limiting | 8080 | Redis (cache) | HTTP Proxy |
-| 2 | [auth-service] | Registration, login, JWT tokens | 3001 | PostgreSQL | REST + Events |
-| 3 | [xxx-service] | [responsibility] | 300X | [DB] | [REST/Async] |
+    Container_Boundary(clients, "Clients") {
+        Container(webApp, "Web application", "React + Vite", "Full-featured client: management, detailed history, statistics")
+        Container(androidApp, "Android application", "React Native", "Daily consultation and alerts client")
+    }
 
-> Full detail per service in `09-microservices/service-catalog.md`
+    Container_Boundary(gateway, "Entry point") {
+        Container(apiGateway, "API Gateway", "Not yet decided", "Single entry point routing to services — see Open questions below")
+    }
 
----
+    Container_Boundary(services, "Microservices — Java 21 + Spring Boot") {
+        Container(security, "security-service", "Spring Boot", "Identity, auth, sessions, RBAC, audit")
+        Container(home, "home-service", "Spring Boot", "Homes, membership, thresholds")
+        Container(device, "device-service", "Spring Boot", "Device registry, device auth, connectivity")
+        Container(measurement, "measurement-service", "Spring Boot", "MQTT ingestion, history, statistics")
+        Container(alert, "alert-service", "Spring Boot", "Threshold and connectivity alert evaluation")
+        Container(recommendation, "recommendation-service", "Spring Boot", "Consumption-based suggestions")
+    }
 
-## 5. Architectural principles
+    ContainerDb(mysql, "Shared database", "MySQL 8", "One physical instance, organized logically by bounded context — see ADR-003 (pending)")
+    ContainerQueue(mqtt, "MQTT broker", "Not yet selected — see scope.md, feature #11", "Device-to-backend telemetry ingestion")
+    ContainerQueue(kafka, "Kafka", "Apache Kafka", "Inter-service domain events — see ADR-002 (pending)")
 
-These principles guide the project's technical decisions. Before making an important decision,
-verify it is consistent with these principles.
+    Rel(owner, webApp, "Uses", "HTTPS")
+    Rel(owner, androidApp, "Uses", "HTTPS")
+    Rel(measuringDevice, mqtt, "Publishes readings", "MQTT")
 
-### P1: API-First
-Design the API contract (OpenAPI) before implementing the service.
-Contracts are the source of truth for consumers.
+    Rel(webApp, apiGateway, "Calls", "REST/HTTPS")
+    Rel(androidApp, apiGateway, "Calls", "REST/HTTPS")
+    Rel(apiGateway, security, "Routes")
+    Rel(apiGateway, home, "Routes")
+    Rel(apiGateway, device, "Routes")
+    Rel(apiGateway, measurement, "Routes")
+    Rel(apiGateway, alert, "Routes")
+    Rel(apiGateway, recommendation, "Routes")
 
-### P2: Database per Service
-Each service has its own database. No service directly accesses another service's database.
-Communication is always through API or events.
+    Rel(mqtt, measurement, "Delivers readings")
+    Rel(measurement, device, "Validates deviceId/apiKey", "REST")
 
-### P3: Fail Fast, Recover Gracefully
-Detect errors early (validation at the edge). When an external service fails,
-use Circuit Breaker to prevent cascades. Always define a fallback.
+    Rel(security, mysql, "Reads/writes its tables")
+    Rel(home, mysql, "Reads/writes its tables")
+    Rel(device, mysql, "Reads/writes its tables")
+    Rel(measurement, mysql, "Reads/writes its tables")
+    Rel(alert, mysql, "Reads/writes its tables")
+    Rel(recommendation, mysql, "Reads/writes its tables")
 
-### P4: Observability by Design
-From day 1: structured JSON logs, metrics with Prometheus,
-distributed traces with Jaeger/Zipkin. It is not optional or a story for "later".
+    Rel(measurement, kafka, "Publishes MeasurementRecorded")
+    Rel(device, kafka, "Publishes DeviceConnectivityLost")
+    Rel(kafka, alert, "Consumes")
+    Rel(kafka, recommendation, "Consumes")
+```
 
-### P5: [Additional principle name]
-[Description]
-
----
-
-## 6. Adopted architectural patterns
-
-| Pattern | Adopted | Reference |
-|---------|---------|-----------|
-| API Gateway | Yes | `05-architecture/pattern-guide.md` |
-| Database per Service | Yes | ADR-00X |
-| CQRS | No (review in Q3) | |
-| Event Sourcing | No | |
-| Circuit Breaker | Yes | ADR-00X |
-| Saga (choreographed) | Yes | ADR-00X |
-| Outbox Pattern | Yes | ADR-00X |
-
----
-
-## 7. Cross-cutting concerns
-
-Transversal concerns that apply to ALL services:
-
-| Concern | Adopted solution | Where it is configured |
-|---------|----------------|------------------------|
-| Authentication / Authorization | JWT + validation in API Gateway | `00-governance/security-policy.md` |
-| Logging | Structured JSON + Correlation ID | Shared logger in internal lib |
-| Tracing | OpenTelemetry → Jaeger | Middleware in each service |
-| Health Checks | GET /health (liveness) + GET /health/ready (readiness) | Service template |
-| Error format | Standard ErrorResponse | `07-api/contracts/openapi/_shared.yaml` |
-| Rate Limiting | At the API Gateway | Kong/NGINX configuration |
-| CORS | Configured in API Gateway | |
-| Circuit Breaker | Resiliency4j / opossum per service | Pattern in `pattern-guide.md` |
+> Both diagrams use C4-PlantUML/Mermaid `C4Context`/`C4Container` notation. If the Mermaid
+> renderer used to view this repository does not support the C4 extension, the same information
+> is in the tables below.
 
 ---
 
-## 8. Registered architectural technical debt
+## Microservices
 
-| ID | Description | Impact | Priority | Target sprint |
-|----|-------------|--------|---------|--------------|
-| AT-001 | [description] | [high/medium/low] | [P1/P2/P3] | [Sprint X] |
+| Service                  | Responsibility                                                                              | Technology                                      | DB                                                            |
+| ------------------------ | ------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------- |
+| `security-service`       | Identity, authentication, sessions, RBAC, audit trail (`02-domain/domain-map.md`, Security) | Java 21 + Spring Boot, Spring Security + OAuth2 | Shared MySQL instance — Security tables (`06-data/models.md`) |
+| `home-service`           | Homes, membership, home-scoped roles, thresholds (Home Management)                          | Java 21 + Spring Boot                           | Shared MySQL instance — Home Management tables                |
+| `device-service`         | Device registry, device authentication (API key), connectivity tracking (Devices)           | Java 21 + Spring Boot                           | Shared MySQL instance — Devices tables                        |
+| `measurement-service`    | MQTT ingestion, storage, consumption history and statistics (Monitoring and Measurements)   | Java 21 + Spring Boot                           | Shared MySQL instance — Monitoring and Measurements tables    |
+| `alert-service`          | Threshold and connectivity alert evaluation and lifecycle (Alerts)                          | Java 21 + Spring Boot                           | Shared MySQL instance — Alerts tables                         |
+| `recommendation-service` | Suggestions generated from a home's own measured consumption (Recommendations)              | Java 21 + Spring Boot                           | Shared MySQL instance — Recommendations tables                |
 
-> See also: `15-project-control/technical-backlog.md`
+Each service has its own repository and its own Jenkins CI/CD pipeline (`01-context/overview.md`,
+Technology stack). All six read and write only their own tables in the one shared MySQL instance
+— see the access-boundary rule in `06-data/models.md`.
+
+The two client applications are not microservices — they call the backend over the API Gateway,
+not each other:
+
+| Client             | Platform | Technology   |
+| ------------------ | -------- | ------------ |
+| Web application    | Browser  | React + Vite |
+| Mobile application | Android  | React Native |
 
 ---
 
-## 9. Planned evolution
+## Communication patterns
 
-| Version | Architectural change | Motivation | Estimated date |
-|---------|---------------------|------------|----------------|
-| v2.0 | [e.g.: Migrate to gRPC for internal communication] | [Latency] | [Q4 2024] |
+- **Sync (REST):**
+  - `security-service` is an Open Host Service for the rest of the system: every other service
+    validates the caller's identity from access-token claims issued by `security-service`, over
+    REST (`02-domain/domain-map.md`, relationships table).
+  - `home-service` → `device-service`, `alert-service`, `recommendation-service`: `homeId` passed
+    and looked up as a foreign reference over REST, never a shared entity or a database join.
+  - `device-service` → `recommendation-service`: same pattern with `deviceId`.
+  - `measurement-service` → `device-service`: validates `deviceId` against its `apiKey` before
+    accepting a published measurement.
+
+- **Async (Kafka — domain events between services, pending `ADR-002-domain-event-transport.md`):**
+  - `measurement-service` publishes `MeasurementRecorded` (topic `monitoring.measurement-recorded`),
+    consumed by `alert-service` and `recommendation-service`.
+  - `device-service` publishes `DeviceConnectivityLost` (topic `devices.device-connectivity-lost`),
+    consumed by `alert-service`.
+  - Full event contracts: `02-domain/domain-events.md`.
+
+- **Device ingestion (MQTT — separate channel, not Kafka):** measuring devices (ESP32 +
+  PZEM-004T V3) publish readings to `measurement-service` over MQTT. This is device-to-backend
+  telemetry, not a domain event between services — see the distinction documented in
+  `02-domain/domain-events.md`. The broker itself is **not yet selected**; only the measuring
+  hardware is currently in hand (`01-context/scope.md`, feature #11).
+
+- **Gateway:** **not yet decided.** No API Gateway product has been chosen — clients currently
+  have no single documented entry point, which is one of the five common architecture mistakes
+  this section's own README warns against. This needs its own ADR (`ADR-004-api-gateway.md`,
+  following the numbering already in use for `ADR-002` and `ADR-003`).
 
 ---
 
-## Key correlations
+## Open questions
 
-- Domain bounded contexts → `02-domain/domain-map.md`
-- Specific decision ADRs → `05-architecture/decisions/`
-- Hexagonal architecture per service → `05-architecture/hexagonal-architecture.md`
-- Applied patterns → `05-architecture/pattern-guide.md`
-- Per-service detail → `09-microservices/service-catalog.md`
-- UML diagrams → `08-uml/`
+These are gaps found while writing this document, not decisions made here:
+
+| Question                                                                                               | Where it should be resolved                                                                                         |
+| ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| Which API Gateway (or none, with services exposed directly)?                                           | New ADR — `ADR-004-api-gateway.md`                                                                                  |
+| Which MQTT broker, and its topic/payload contract with devices?                                        | `01-context/scope.md`, feature #11 (already flagged there as not yet designed)                                      |
+| Which push notification provider delivers alerts/recommendations (`01-context/scope.md`, feature #15)? | Not yet assigned a document — likely a new ADR if the choice is hard to reverse, or `cross-cutting.md` if it is not |
+
+---
+
+## Correlations
+
+- Bounded contexts and inter-context relationships (source for this document's communication
+  patterns) → `02-domain/domain-map.md`
+- Domain events referenced above → `02-domain/domain-events.md`
+- Full stack decisions and justifications → `01-context/overview.md`
+- Shared-database decision → `ADR-003-shared-database.md` (`05-architecture/decisions/records/`, pending)
+- Kafka transport decision → `ADR-002-domain-event-transport.md` (`05-architecture/decisions/records/`, pending)
+- Table-level detail per service → `06-data/models.md`
+- How this is actually deployed → `05-architecture/deployment.md`
