@@ -2,7 +2,8 @@
 
 > This document evaluates the normal form of the current schema and justifies any intentional
 > denormalization. As of this writing, the schema has **no intentional denormalization** — every
-> table is in Third Normal Form (3NF).  
+> table is in Third Normal Form (3NF). This is stated plainly rather than manufactured content to
+> fill the section.
 
 ---
 
@@ -51,7 +52,7 @@ that depends on that category rather than on the row's own key:
 |-------|----------|-----------|
 | `home` | Home type | `home_type_id` → `home_type` |
 | `device` | Appliance type | `appliance_type_id` → `appliance_type` |
-| `alert` | Consumption level | `id_consumption_level` → `consumption_level` |
+| `alert` | Consumption level | `consumption_level_id` → `consumption_level` |
 
 None of these tables store the category's name, description, or range values directly — only the
 reference. Renaming a home type, for example, requires changing exactly one row in `home_type`,
@@ -63,7 +64,7 @@ never a bulk update across every `home` that uses it.
 
 `alert` has no `severity` column, even though severity is exactly the kind of value a team is
 often tempted to cache for read performance. It was deliberately left out and is computed at
-request time from `id_consumption_level` (see `02-domain/entities-and-rules.md`). This is not an
+request time from `consumption_level_id` (see `02-domain/entities-and-rules.md`). This is not an
 oversight to fix — caching it would be the denormalization, not the current design.
 
 ---
