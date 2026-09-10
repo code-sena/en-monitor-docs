@@ -14,6 +14,10 @@
 4. This document defines **what a term means**, not how it is stored or structured.
    Attributes, cardinalities, and allowed enumeration values belong to the data model and the
    domain rules, not here.
+5. Module names such as `Security` or `Devices` refer to bounded contexts, not to deployment
+   artifacts. Service names are defined in `09-microservices/service-catalog.md`.
+
+---
 
 ## Domain terms — Identity and access
 
@@ -104,7 +108,7 @@
 |------|-----------|
 | Microservice | Independently deployed service that owns one bounded context, with its own repository, lifecycle, and CI/CD. **In this project it does not imply a dedicated database** — see `Shared Database`. |
 | Bounded Context | Boundary within which a particular domain model has consistent meaning. `Security`, `Home Management`, `Devices`, `Monitoring and Measurements`, `Alerts`, and `Recommendations` are separate contexts. |
-| Shared Database | Current decision: all services connect to a single physical database, organized logically by domain. Schema migrations live in a separate repository. |
+| Shared Database | Current decision: all services connect to a single physical database, organized logically by domain. Each domain owns its own migrations repository, which may only alter that domain's own tables. |
 | Distributed Monolith | Anti-pattern this project explicitly avoids: services that share a database also reaching into each other's tables or entities instead of talking through contracts. |
 | Hexagonal Architecture | Architectural style, also called Ports and Adapters, where the domain is isolated from frameworks and all external interaction happens through explicit ports implemented by adapters. |
 | Port | Interface the application layer depends on. Inbound ports expose use cases; outbound ports declare capabilities the application needs from the outside. |
@@ -151,3 +155,10 @@
 | W | Watt — unit of active power |
 
 ---
+
+## Correlations
+
+- Documentation language rule → `05-architecture/decisions/records/ADR-001-documentation-language.md`
+- Entity attributes, cardinalities, and business rules → `02-domain/entities-and-rules.md`
+- Data model, units, and enumeration values → `06-data/models.md`
+- Service names and ownership per context → `09-microservices/service-catalog.md`
