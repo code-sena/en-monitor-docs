@@ -42,9 +42,9 @@
 
 ## RNF3: Security
 
-| ID      | Requirement                                                               | Description                                                                                                                                                                           |
-| ------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| ERNF3.1 | Protection against unauthorized access, encryption, regulatory compliance | The system must protect user information through secure authentication mechanisms, data encryption in transit and at rest, and compliance with regulations such as GDPR or equivalent |
+| ID      | Requirement                                                               | Description                                                                                                                                                                                          |
+| ------- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ERNF3.1 | Protection against unauthorized access, encryption, regulatory compliance | The system must protect user information through secure authentication mechanisms, encryption of data in transit and at rest, and compliance with regulations such as Law 1581 of 2012 (Habeas Data) |
 
 **Abnormal-situation handling (from the SRS):**
 
