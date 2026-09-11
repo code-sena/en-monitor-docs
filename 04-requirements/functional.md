@@ -55,12 +55,12 @@
 
 ## RF5 — Measuring Device Management
 
-| ID     | Module            | Description                                                                                                                                                                               | Source (HU) | Priority  |
-| ------ | ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --------- |
-| ERF5.1 | Device Management | The measuring device must automatically send electricity consumption data (voltage, current, active power, and accumulated energy) to the system at regular 60-second intervals over HTTP | HU6         | Very High |
-| ERF5.2 | Device Management | The system must recognize and authenticate devices using a unique identifier and an access key, enabling their secure linking to a project                                                | HU6         | Very High |
-| ERF5.3 | Device Management | The system must monitor the device's connection status (online / offline) based on the last measurement received                                                                          | HU6         | Very High |
-| ERF5.4 | Device Management | The device must be able to automatically reconnect to the system after a WiFi connection loss or a temporary communication failure, with no user intervention                             | HU6         | Very High |
+| ID     | Module            | Description                                                                                                                                                                                                                                                                                 | Source (HU) | Priority  |
+| ------ | ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | --------- |
+| ERF5.1 | Device Management | The measuring device must automatically send electricity consumption data (voltage, current, active power, and accumulated energy) to the broker at regular 60-second intervals using the MQTT protocol, so that the broker can transmit the consumption information to subscribed clients. | HU6         | Very High |
+| ERF5.2 | Device Management | The system must recognize and authenticate devices using a unique identifier and an access key, enabling their secure linking to a project                                                                                                                                                  | HU6         | Very High |
+| ERF5.3 | Device Management | The system must monitor the device's connection status (online / offline) based on the last measurement received                                                                                                                                                                            | HU6         | Very High |
+| ERF5.4 | Device Management | The device must be able to automatically reconnect to the system after a WiFi connection loss or a temporary communication failure, with no user intervention                                                                                                                               | HU6         | Very High |
 
 ---
 
