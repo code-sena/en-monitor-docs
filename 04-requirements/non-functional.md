@@ -83,7 +83,7 @@ with no detailed table (unlike RNF1–RNF4 above) and **no corresponding HU** in
 | RNF7 / ERNF7.1 | Portability     | Ability to operate across different platforms or environments  |
 
 **Portability, as further specified in the SRS's interface requirements:** Windows 7 or later
-for desktop, the latest available version of Android and iOS for mobile, and compatibility with
+for desktop, the latest available version of Android for mobile, and compatibility with
 Mozilla, Chrome, Edge, Brave, Vivaldi, and similar browsers.
 
 > **Open item:** RNF5–RNF7 are part of the SRS but currently have no dedicated Historia de

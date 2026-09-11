@@ -46,7 +46,7 @@ If there is code without an HU: possible gold-plating or a bug introduced withou
 | ERF4.3.1 | Alert visualization and resolution           | HU5 | TC-HU5-02            | Pending |
 | ERF4.4   | Automatic recommendation generation          | HU5 | TC-HU5-03            | Pending |
 | ERF4.4.1 | Recommendation visualization / mark as read  | HU5 | TC-HU5-04            | Pending |
-| ERF5.1   | Device data transmission (60s / HTTP)        | HU6 | TC-HU6-01            | Pending |
+| ERF5.1   | Device data transmission (60s / MQTT)        | HU6 | TC-HU6-01            | Pending |
 | ERF5.2   | Device linking and authentication            | HU6 | TC-HU6-02            | Pending |
 | ERF5.3   | Device connection status                     | HU6 | TC-HU6-03            | Pending |
 | ERF5.4   | Automatic reconnection                       | HU6 | TC-HU6-04            | Pending |

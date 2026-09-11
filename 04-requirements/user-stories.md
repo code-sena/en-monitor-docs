@@ -220,7 +220,7 @@ Scenario 3: View and act on notifications
 Scenario 1: Periodic data transmission
   Given a linked measuring device
   When it operates normally
-  Then it transmits voltage, current, active power, and accumulated energy every 60 seconds over HTTP
+  Then it transmits voltage, current, active power, and accumulated energy every 60 seconds via MQTT to the broker.
 
 Scenario 2: Secure linking
   Given a device with a unique identifier and access key
