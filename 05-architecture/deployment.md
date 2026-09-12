@@ -12,14 +12,14 @@ flowchart TB
 
     subgraph host["Deployment host — target not yet decided, see Open questions"]
         subgraph docker["Docker"]
-            gw[API Gateway — not yet decided]
+            gw[API Gateway — Spring Cloud Gateway, per ADR-004]
             sec[security-service]
             homesvc[home-service]
             dev[device-service]
             meas[measurement-service]
             alertsvc[alert-service]
             rec[recommendation-service]
-            mqttbroker[MQTT broker — not yet selected]
+            mqttbroker[MQTT broker — Eclipse Mosquitto, per ADR-007]
             kafkabroker[Kafka]
             mysql[(MySQL 8 — shared instance)]
             web[web application — React static build]
@@ -59,11 +59,11 @@ not part of the stack**; there is no orchestrator beyond Docker itself.
 | Container                                          | Image basis                                      | Notes                                                                                                                   |
 | -------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | `security-service` … `recommendation-service` (×6) | Java 21 + Spring Boot, one image per service     | Built and deployed independently, each from its own repository and Jenkins pipeline                                     |
-| `mysql`                                            | MySQL 8                                          | Single shared instance — see `ADR-003-shared-database.md` (pending) and the access-boundary rule in `06-data/models.md` |
-| MQTT broker                                        | Not yet selected                                 | See Open questions                                                                                                      |
-| Kafka                                              | Apache Kafka                                     | See `ADR-002-domain-event-transport.md` (pending)                                                                       |
+| `mysql`                                            | MySQL 8                                          | Single shared instance — see `ADR-003-shared-database.md` and the access-boundary rule in `06-data/models.md` |
+| MQTT broker                                        | Eclipse Mosquitto                                | See `ADR-007-mqtt-broker-selection.md`                                                                                   |
+| Kafka                                              | Apache Kafka                                     | See `ADR-002-domain-event-transport.md`                                                                                 |
 | `web`                                              | React + Vite production build, served statically | —                                                                                                                       |
-| API Gateway                                        | Not yet decided                                  | See Open questions                                                                                                      |
+| API Gateway                                        | Spring Cloud Gateway                             | See `ADR-004-api-gateway.md`                                                                                             |
 
 A per-container resource sizing table is not included here — no minimum CPU/RAM/disk requirements
 have been set for any container yet. This should be filled in once the deployment host is chosen
@@ -76,10 +76,9 @@ have been set for any container yet. This should be filled in once the deploymen
 - **Devices → backend:** the ESP32 units connect over the home's own Wi-Fi network and publish to
   the MQTT broker; the backend never initiates a connection to a device
   (`02-domain/domain-map.md`, relationships table).
-- **Clients → backend:** the web and Android clients call the backend over REST/HTTPS. Whether
-  that traffic goes through a single API Gateway or hits services directly is exactly the open
-  gateway decision in `05-architecture/overview.md` — this document assumes a gateway exists, but
-  that assumption is not yet a decision.
+- **Clients → backend:** the web and Android clients call the backend over REST/HTTPS, through
+  Spring Cloud Gateway as the single entry point (`ADR-004-api-gateway.md`) — not directly against
+  the six services.
 - **Inter-service:** REST calls and Kafka traffic stay inside the Docker network on the
   deployment host; no inter-service traffic is designed to cross the public internet.
 - **Database access:** only the six microservices connect to MySQL; no client application or
@@ -129,8 +128,6 @@ These are gaps found while writing this document, not decisions made here:
 | Question                                                                                                   | Impact                                                                                                                                  |
 | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Where does Production actually run (a SENA-provided machine, a developer's own machine, a free-tier host)? | Determines the rest of this document's network configuration and hardware requirements sections                                         |
-| Which MQTT broker?                                                                                         | Blocks finalizing the "What goes in Docker" and "Network configuration" sections; already flagged in `01-context/scope.md`, feature #11 |
-| Which API Gateway, or none?                                                                                | Same as in `05-architecture/overview.md` — needs `ADR-004-api-gateway.md`                                                               |
 | Container resource sizing (CPU/RAM/disk per service)                                                       | Cannot be set meaningfully before the hosting target is known                                                                           |
 | TLS termination and port allocation                                                                        | Depends on the Gateway and hosting decisions above                                                                                      |
 
@@ -139,7 +136,7 @@ These are gaps found while writing this document, not decisions made here:
 ## Correlations
 
 - Container-level architecture and communication patterns → `05-architecture/overview.md`
-- Shared-database decision → `ADR-003-shared-database.md` (`05-architecture/decisions/records/`, pending)
-- Kafka transport decision → `ADR-002-domain-event-transport.md` (`05-architecture/decisions/records/`, pending)
+- Shared-database decision → `ADR-003-shared-database.md` (`05-architecture/decisions/records/`)
+- Kafka transport decision → `ADR-002-domain-event-transport.md` (`05-architecture/decisions/records/`)
 - Environments and constraints (budget, timeline, team) → `01-context/scope.md`
 - Database migrations repository (Liquibase) → `06-data/migration-strategy.md`

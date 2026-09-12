@@ -2,7 +2,7 @@
 
 - **ID:** ADR-005
 - **Date:** 2026-09-10
-- **Status:** Proposed
+- **Status:** Accepted
 - **Authors:** Miguel Angel Garcia Artunduaga and Juan Esteban Cortes Parra
 
 ---

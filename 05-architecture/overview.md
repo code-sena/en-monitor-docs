@@ -33,7 +33,7 @@ C4Container
     }
 
     Container_Boundary(gateway, "Entry point") {
-        Container(apiGateway, "API Gateway", "Not yet decided", "Single entry point routing to services — see Open questions below")
+        Container(apiGateway, "API Gateway", "Spring Cloud Gateway", "Single entry point routing to services — see ADR-004-api-gateway.md")
     }
 
     Container_Boundary(services, "Microservices — Java 21 + Spring Boot") {
@@ -45,9 +45,9 @@ C4Container
         Container(recommendation, "recommendation-service", "Spring Boot", "Consumption-based suggestions")
     }
 
-    ContainerDb(mysql, "Shared database", "MySQL 8", "One physical instance, organized logically by bounded context — see ADR-003 (pending)")
-    ContainerQueue(mqtt, "MQTT broker", "Not yet selected — see scope.md, feature #11", "Device-to-backend telemetry ingestion")
-    ContainerQueue(kafka, "Kafka", "Apache Kafka", "Inter-service domain events — see ADR-002 (pending)")
+    ContainerDb(mysql, "Shared database", "MySQL 8", "One physical instance, organized logically by bounded context — see ADR-003-shared-database.md")
+    ContainerQueue(mqtt, "MQTT broker", "Eclipse Mosquitto", "Device-to-backend telemetry ingestion — see ADR-007-mqtt-broker-selection.md")
+    ContainerQueue(kafka, "Kafka", "Apache Kafka", "Inter-service domain events — see ADR-002-domain-event-transport.md")
 
     Rel(owner, webApp, "Uses", "HTTPS")
     Rel(owner, androidApp, "Uses", "HTTPS")
@@ -121,7 +121,7 @@ not each other:
   - `measurement-service` → `device-service`: validates `deviceId` against its `apiKey` before
     accepting a published measurement.
 
-- **Async (Kafka — domain events between services, pending `ADR-002-domain-event-transport.md`):**
+- **Async (Kafka — domain events between services, per `ADR-002-domain-event-transport.md`):**
   - `measurement-service` publishes `MeasurementRecorded` (topic `monitoring.measurement-recorded`),
     consumed by `alert-service` and `recommendation-service`.
   - `device-service` publishes `DeviceConnectivityLost` (topic `devices.device-connectivity-lost`),
@@ -134,10 +134,9 @@ not each other:
   `02-domain/domain-events.md`. The broker itself is **not yet selected**; only the measuring
   hardware is currently in hand (`01-context/scope.md`, feature #11).
 
-- **Gateway:** **not yet decided.** No API Gateway product has been chosen — clients currently
-  have no single documented entry point, which is one of the five common architecture mistakes
-  this section's own README warns against. This needs its own ADR (`ADR-004-api-gateway.md`,
-  following the numbering already in use for `ADR-002` and `ADR-003`).
+- **Gateway:** Spring Cloud Gateway, per `ADR-004-api-gateway.md`. Both clients call it as their
+  single entry point; it routes to the six backend services and verifies each request's access
+  token per `ADR-005-authentication-strategy.md`, instead of every service duplicating that check.
 
 ---
 
@@ -147,8 +146,6 @@ These are gaps found while writing this document, not decisions made here:
 
 | Question                                                                                               | Where it should be resolved                                                                                         |
 | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| Which API Gateway (or none, with services exposed directly)?                                           | New ADR — `ADR-004-api-gateway.md`                                                                                  |
-| Which MQTT broker, and its topic/payload contract with devices?                                        | `01-context/scope.md`, feature #11 (already flagged there as not yet designed)                                      |
 | Which push notification provider delivers alerts/recommendations (`01-context/scope.md`, feature #15)? | Not yet assigned a document — likely a new ADR if the choice is hard to reverse, or `cross-cutting.md` if it is not |
 
 ---
@@ -159,7 +156,7 @@ These are gaps found while writing this document, not decisions made here:
   patterns) → `02-domain/domain-map.md`
 - Domain events referenced above → `02-domain/domain-events.md`
 - Full stack decisions and justifications → `01-context/overview.md`
-- Shared-database decision → `ADR-003-shared-database.md` (`05-architecture/decisions/records/`, pending)
-- Kafka transport decision → `ADR-002-domain-event-transport.md` (`05-architecture/decisions/records/`, pending)
+- Shared-database decision → `ADR-003-shared-database.md` (`05-architecture/decisions/records/`)
+- Kafka transport decision → `ADR-002-domain-event-transport.md` (`05-architecture/decisions/records/`)
 - Table-level detail per service → `06-data/models.md`
 - How this is actually deployed → `05-architecture/deployment.md`
