@@ -2,8 +2,8 @@
 
 - **ID:** ADR-003
 - **Date:** 2026-09-10
-- **Status:** Proposed
-- **Authors:** Miguel Ange Garcia and Juan Esteban Cortes Parra
+- **Status:** Accepted
+- **Authors:** Miguel Angel Garcia and Juan Esteban Cortes Parra
 
 ---
 
