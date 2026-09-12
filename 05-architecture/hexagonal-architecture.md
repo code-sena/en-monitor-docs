@@ -56,10 +56,67 @@ you need to simulate the database.
 
 ---
 
-## Folder structure — the project standard
+## Folder structure — generic, for any service
 
-This is the actual structure of `security-service`, and it is the standard every one of the six
-microservices in this project follows — not a suggestion to adapt, a layout to copy:
+This is the shape every service in this project follows. Replace `Xxx` with the aggregate or
+concept the service owns — this same layout applies to `security-service`, `home-service`,
+`device-service`, `measurement-service`, `alert-service`, and `recommendation-service` alike.
+
+```
+[service-name]-service
+│
+├── adapter/
+│   ├── in/
+│   │   └── web/
+│   │       └── XxxController.java           # Translates HTTP requests into use case calls
+│   │
+│   └── out/
+│       ├── client/
+│       │   └── XxxClient.java                # Calls another service or an external system
+│       │
+│       ├── persistence/
+│       │   ├── entity/
+│       │   │   └── XxxEntity.java            # JPA mapping — never used inside domain/
+│       │   ├── mapper/
+│       │   │   └── XxxMapper.java            # Translates Entity ↔ Domain Model
+│       │   ├── repository/
+│       │   │   └── XxxJpaRepository.java     # Spring Data interface
+│       │   └── XxxRepositoryAdapter.java     # Implements the domain's outbound port
+│       │
+│       └── security/                          # Only where the service issues or reads tokens
+│           └── XxxTokenProvider.java
+│
+├── application/
+│   ├── port/
+│   │   ├── in/                                # Empty by convention — see note below
+│   │   └── out/
+│   │       └── XxxRepository.java             # Outbound port — an interface, no implementation
+│   │
+│   └── usecase/
+│       └── DoSomethingWithXxxUseCase.java     # Coordinates the domain; called directly by adapters
+│
+├── domain/
+│   ├── exception/
+│   │   └── XxxNotFoundException.java
+│   ├── model/
+│   │   └── Xxx.java                           # Framework-free — no Spring, no JPA
+│   └── valueobject/
+│       └── XxxStatus.java
+│
+├── infrastructure/
+│   ├── config/
+│   │   └── SecurityConfig.java
+│   ├── exception/
+│   └── observability/
+│
+└── XxxServiceApplication.java                 # Spring Boot bootstrap
+```
+
+---
+
+## Concrete example — `security-service`
+
+The structure already built for Security, following the same layout as the reference above:
 
 ```
 src/main/java/.../security/
@@ -130,7 +187,7 @@ src/main/java/.../security/
 │   │   └── SecurityConfig.java
 │   ├── exception/                         # @ControllerAdvice — maps domain exceptions → HTTP
 │   └── observability/
-└── MsSecurityApplication.java             # Spring Boot bootstrap
+└── SecurityServiceApplication.java        # Spring Boot bootstrap
 ```
 
 `home-service`, `device-service`, `measurement-service`, `alert-service`, and
@@ -147,66 +204,55 @@ adapters implement them.
 ### Driving Port (Input Port) — a deliberate simplification in this project
 
 The textbook version of this pattern puts a separate interface in `application/port/in/` (e.g.
-`AuthenticateUserPort`) that the use case class implements, so a controller depends on the
+`DoSomethingWithXxxPort`) that the use case class implements, so a controller depends on the
 interface rather than the concrete class. **This project does not do that** — as the folder
-structure above shows, `application/port/in/` is empty. Controllers inject the concrete use case
-class directly:
+structure above shows, `application/port/in/` is empty in every service. Controllers inject the
+concrete use case class directly:
 
 ```java
-// application/usecase/AuthenticateUserUseCase.java — this class itself IS the driving port
+// application/usecase/DoSomethingWithXxxUseCase.java — this class itself IS the driving port
 @Service
-public class AuthenticateUserUseCase {
-    public AuthenticationResult execute(AuthenticateUserCommand command) { ... }
+public class DoSomethingWithXxxUseCase {
+    public XxxResult execute(XxxCommand command) { ... }
 }
 ```
 
 This is a conscious trade-off, not an oversight: with one implementation per use case and no
 plan to swap it, the extra interface adds a layer of indirection without a corresponding benefit.
 The cost is that a controller technically depends on a concrete class instead of an abstraction —
-acceptable here because nothing in this project ever substitutes a different implementation of
-`AuthenticateUserUseCase` at runtime. If that ever changes for a specific use case, that specific
-one gets its own `port/in` interface; the rest do not need to change to stay consistent.
+acceptable here because no service in this project ever substitutes a different implementation of
+a use case at runtime. If that ever changes for a specific use case, that specific one gets its
+own `port/in` interface; the rest do not need to change to stay consistent.
 
-### What the Security domain can do — its public API from the outside
-
-Every use case below is something a caller (a Controller today) can ask the Security domain to
-do. This is the domain's complete public surface — anything not on this list is not something an
-outside caller can make the Security domain do directly.
-
-| Use case                             | What it does                                                                 |
-| ------------------------------------ | ---------------------------------------------------------------------------- |
-| `CreateUserUseCase`                  | Registers a new `Person` + `User` pair                                       |
-| `AuthenticateUserUseCase`            | Verifies credentials, issues an access/refresh token pair, opens a `Session` |
-| `AuthorizeUserUseCase`               | Checks whether an already-authenticated caller holds a given `Permission`    |
-| `RefreshSessionUseCase`              | Exchanges a valid refresh token for a new access token                       |
-| `LogoutUseCase`                      | Closes the current session                                                   |
-| `RevokeSessionUseCase`               | Invalidates a specific session (e.g. from another device)                    |
-| `RequestPasswordResetUseCase`        | Issues a `PasswordResetToken` and triggers the reset email                   |
-| `ResetPasswordUseCase`               | Consumes a valid, unused, unexpired reset token to set a new password        |
-| `UpdateUserProfileUseCase`           | Updates a user's `Person`-level data                                         |
-| `UpdateUserConfigurationUseCase`     | Updates notification/theme/language preferences                              |
-| `DeleteAccountUseCase`               | Deletes a user's account                                                     |
-| `AssignRoleUseCase`                  | Grants a `SystemRole` to a user                                              |
-| `AssignPermissionToRoleUseCase`      | Grants a `Permission` to a `SystemRole`                                      |
-| `UpdatePasswordPolicyUseCase`        | Changes the enforced password rules                                          |
-| `UpdateSecurityConfigurationUseCase` | Changes a tunable security parameter                                         |
-| `RegisterAuditUseCase`               | Writes one `AuditLog` entry                                                  |
-| `RegisterLoginErrorUseCase`          | Writes one `LoginErrorLog` entry and applies the lockout rule                |
+**Example (`security-service`):** `AuthenticateUserUseCase` is itself the driving port that
+`AuthController` depends on directly — no `AuthenticateUserPort` interface exists anywhere in the
+codebase.
 
 ### Driven Port (Output Port)
 
-Defines what the domain needs from the outside world — without knowing how it is implemented.
-This is "the interior perspective without knowing how it's implemented": the use case class below
-is written entirely against these interfaces, never against `UserJpaRepository`, `BCrypt`, or any
-other concrete technology.
+Defines what the domain needs from the outside world — without knowing how it is implemented. The
+use case is written entirely against these interfaces, never against a concrete JPA repository,
+a hashing library, or any other technology.
+
+```java
+// application/port/out/XxxRepository.java
+public interface XxxRepository {
+    Xxx save(Xxx xxx);
+    Optional<Xxx> findById(XxxId id);
+}
+```
+
+One port per capability the domain needs — never one giant port that bundles unrelated
+capabilities together.
+
+**Example (`security-service`):** `UserRepository`, `PasswordHasher`, and `TokenProvider` are
+three separate ports, not one combined `SecurityGateway` interface:
 
 ```java
 // application/port/out/UserRepository.java
 public interface UserRepository {
     User save(User user);
-    Optional<User> findById(UserId id);
     Optional<User> findByEmail(Email email);
-    boolean existsByEmail(Email email);
 }
 
 // application/port/out/PasswordHasher.java
@@ -218,16 +264,13 @@ public interface PasswordHasher {
 // application/port/out/TokenProvider.java
 public interface TokenProvider {
     String issueAccessToken(UserId userId, Set<String> permissionCodes);
-    String issueRefreshToken(SessionId sessionId);
-    Optional<UserId> validateAccessToken(String token);
 }
 ```
 
-The full inventory for Security: `AuditRepository`, `EmailSender`, `LoginErrorLogRepository`,
-`PasswordHasher`, `PasswordPolicyRepository`, `PasswordResetTokenRepository`,
-`PermissionRepository`, `RoleRepository`, `SecurityConfigurationRepository`, `SessionRepository`,
-`TokenProvider`, `UserRepository` — one port per capability the domain needs, never one giant
-port that bundles unrelated capabilities together.
+The full outbound-port inventory for Security also includes `AuditRepository`, `EmailSender`,
+`LoginErrorLogRepository`, `PasswordPolicyRepository`, `PasswordResetTokenRepository`,
+`PermissionRepository`, `RoleRepository`, `SecurityConfigurationRepository`, and
+`SessionRepository` — the same one-port-per-capability rule applied twelve times.
 
 ---
 
@@ -240,219 +283,156 @@ response. It contains no business rule — if you find an `if` statement enforci
 inside a controller, that rule belongs in the domain model or the use case, not here.
 
 ```java
-// adapter/in/web/AuthController.java
+// adapter/in/web/XxxController.java
 @RestController
-@RequestMapping("/auth")
-public class AuthController {
+@RequestMapping("/xxx")
+public class XxxController {
 
-    private final AuthenticateUserUseCase authenticateUserUseCase;
+    private final DoSomethingWithXxxUseCase useCase;
 
-    public AuthController(AuthenticateUserUseCase authenticateUserUseCase) {
-        this.authenticateUserUseCase = authenticateUserUseCase;
+    public XxxController(DoSomethingWithXxxUseCase useCase) {
+        this.useCase = useCase;
     }
 
-    @PostMapping("/login")
-    public ResponseEntity<AuthResponseDto> login(@RequestBody @Valid LoginRequestDto request) {
+    @PostMapping
+    public ResponseEntity<XxxResponseDto> handle(@RequestBody @Valid XxxRequestDto request) {
         // 1. Translate the HTTP DTO into a domain command — no business meaning yet, just shape
-        AuthenticateUserCommand command =
-            new AuthenticateUserCommand(request.email(), request.password());
+        XxxCommand command = XxxCommand.from(request);
 
         // 2. Call the use case — this line is the entire boundary crossing
-        AuthenticationResult result = authenticateUserUseCase.execute(command);
+        XxxResult result = useCase.execute(command);
 
-        // 3. Translate the domain result back into an HTTP DTO — the client never sees
-        //    AuthenticationResult, User, or Session directly
-        AuthResponseDto response =
-            new AuthResponseDto(result.accessToken(), result.refreshToken());
-        return ResponseEntity.ok(response);
+        // 3. Translate the domain result back into an HTTP DTO
+        return ResponseEntity.ok(XxxResponseDto.from(result));
     }
 }
 ```
 
-Domain exceptions (`InvalidCredentialsException`, `AccountBlockedException`, ...) propagate up
-from the use case uncaught by the controller itself — mapping them to an HTTP status happens once,
-centrally, in `infrastructure/exception/` (a `@ControllerAdvice`), not with a `try/catch` block
-repeated in every controller method. This is the concrete answer to the open question
-`05-architecture/cross-cutting.md` raises under "Error handling": the mapping table that document
-says does not exist yet is exactly what belongs in that `@ControllerAdvice` class.
+Domain exceptions propagate up from the use case uncaught by the controller itself — mapping them
+to an HTTP status happens once, centrally, in `infrastructure/exception/` (a
+`@ControllerAdvice`), not with a `try/catch` block repeated in every controller method. This is
+the concrete answer to the open question `05-architecture/cross-cutting.md` raises under "Error
+handling": the mapping table that document says does not exist yet is exactly what belongs in
+that `@ControllerAdvice` class.
+
+**Example (`security-service`):** `AuthController.login()` follows this exact shape — it builds
+an `AuthenticateUserCommand`, calls `AuthenticateUserUseCase.execute(...)`, and returns an
+`AuthResponseDto`. It never checks `failedLoginAttempts` or any other rule itself; if
+`InvalidCredentialsException` or `AccountBlockedException` is thrown, the controller lets it
+propagate to the shared `@ControllerAdvice`.
 
 ### Secondary Adapter — implementing the output Repository
 
 The repository adapter implements the driven port. The domain does not know MySQL, JPA, or
-Hibernate exist — it only knows `UserRepository`.
+Hibernate exist — it only knows the port interface.
 
 ```java
-// adapter/out/persistence/entity/UserEntity.java — persistence entity, maps the table 1:1
+// adapter/out/persistence/entity/XxxEntity.java — persistence entity, maps the table 1:1
 @Entity
-@Table(name = "user")
-public class UserEntity {
+@Table(name = "xxx")
+public class XxxEntity {
     @Id
-    private String idUser;
-    private String idPerson;
-    private String passwordHash;
-    private String email;
-    private boolean emailVerified;
-    private LocalDateTime dateOfRegistation;
-    @Enumerated(EnumType.STRING)
-    private UserStatusEntity status;
-    private int failedLoginAttempts;
-    private LocalDateTime lastLoginAt;
-    // getters/setters — no business logic lives here
+    private String id;
+    // fields matching the table columns — no business logic lives here
 }
 
-// adapter/out/persistence/repository/UserJpaRepository.java — Spring Data, framework-facing only
-public interface UserJpaRepository extends JpaRepository<UserEntity, String> {
-    Optional<UserEntity> findByEmail(String email);
-    boolean existsByEmail(String email);
-}
+// adapter/out/persistence/repository/XxxJpaRepository.java — Spring Data, framework-facing only
+public interface XxxJpaRepository extends JpaRepository<XxxEntity, String> { }
 
-// adapter/out/persistence/mapper/UserMapper.java — translates in both directions
+// adapter/out/persistence/mapper/XxxMapper.java — translates in both directions
 @Component
-public class UserMapper {
-    public User toDomain(UserEntity entity) { /* UserEntity → User aggregate */ }
-    public UserEntity toEntity(User domain) { /* User aggregate → UserEntity */ }
+public class XxxMapper {
+    public Xxx toDomain(XxxEntity entity) { /* Entity → domain model */ }
+    public XxxEntity toEntity(Xxx domain) { /* domain model → Entity */ }
 }
 
-// adapter/out/persistence/UserRepositoryAdapter.java — implements the driven port
+// adapter/out/persistence/XxxRepositoryAdapter.java — implements the driven port
 @Component
-public class UserRepositoryAdapter implements UserRepository {
+public class XxxRepositoryAdapter implements XxxRepository {
 
-    private final UserJpaRepository jpaRepository;
-    private final UserMapper mapper;
+    private final XxxJpaRepository jpaRepository;
+    private final XxxMapper mapper;
 
-    public UserRepositoryAdapter(UserJpaRepository jpaRepository, UserMapper mapper) {
+    public XxxRepositoryAdapter(XxxJpaRepository jpaRepository, XxxMapper mapper) {
         this.jpaRepository = jpaRepository;
         this.mapper = mapper;
     }
 
     @Override
-    public User save(User user) {
-        UserEntity saved = jpaRepository.save(mapper.toEntity(user));
-        return mapper.toDomain(saved);
-    }
-
-    @Override
-    public Optional<User> findByEmail(Email email) {
-        return jpaRepository.findByEmail(email.value()).map(mapper::toDomain);
-    }
-
-    @Override
-    public boolean existsByEmail(Email email) {
-        return jpaRepository.existsByEmail(email.value());
-    }
-
-    @Override
-    public Optional<User> findById(UserId id) {
-        return jpaRepository.findById(id.value()).map(mapper::toDomain);
+    public Xxx save(Xxx xxx) {
+        return mapper.toDomain(jpaRepository.save(mapper.toEntity(xxx)));
     }
 }
 ```
 
-Every other repository port (`SessionRepository`, `PermissionRepository`, ...) is implemented the
-same way: one `*Entity`, one `*JpaRepository`, one `*Mapper`, one `*RepositoryAdapter` — the
+One `*Entity`, one `*JpaRepository`, one `*Mapper`, one `*RepositoryAdapter` per aggregate — the
 pattern does not change per aggregate, only the fields do.
 
-### Secondary Adapter — a category the generic template does not have: `adapter/out/security/`
+**Example (`security-service`):** `UserRepositoryAdapter` implements `UserRepository` exactly this
+way, backed by `UserEntity`, `UserJpaRepository`, and `UserMapper`. The other eleven repository
+ports in Security (`SessionRepository`, `PermissionRepository`, ...) each get their own
+`*Entity`/`*JpaRepository`/`*Mapper`/`*RepositoryAdapter` set following the identical pattern.
 
-Not every driven port is a repository. `TokenProvider` and `PasswordHasher` are adapters too, just
-not persistence ones:
+### A category the generic template does not have: `adapter/out/security/`
+
+Not every driven port is a repository. A port that hashes a password or issues a token is still a
+secondary adapter — it just is not persistence:
 
 ```java
-// adapter/out/security/PasswordHasherImpl.java
+// adapter/out/security/XxxTokenProvider.java
 @Component
-public class PasswordHasherImpl implements PasswordHasher {
-
-    private final PasswordEncoder encoder; // Spring Security's BCryptPasswordEncoder
-
-    public PasswordHasherImpl(PasswordEncoder encoder) {
-        this.encoder = encoder;
-    }
-
-    @Override
-    public String hash(String rawPassword) {
-        return encoder.encode(rawPassword);
-    }
-
-    @Override
-    public boolean matches(String rawPassword, String hash) {
-        return encoder.matches(rawPassword, hash);
-    }
-}
-
-// adapter/out/security/JwtTokenProvider.java
-@Component
-public class JwtTokenProvider implements TokenProvider {
-    // Wraps a JWT library. The domain calls TokenProvider.issueAccessToken(...) and
-    // never sees a JWT library type — swapping JJWT for Nimbus JOSE is a change confined
-    // entirely to this one class.
+public class XxxTokenProvider implements TokenProvider {
+    // Wraps whatever library actually issues the token. The domain calls
+    // TokenProvider.issueAccessToken(...) and never sees that library's types —
+    // swapping the library is a change confined entirely to this one class.
 }
 ```
 
-This is exactly what the `PasswordHasher` outbound port already protects against, per
+**Example (`security-service`):** `JwtTokenProvider` implements `TokenProvider` by wrapping a JWT
+library, and `PasswordHasherImpl` implements `PasswordHasher` by wrapping Spring Security's
+`BCryptPasswordEncoder`. This is exactly what the `PasswordHasher` port protects against, per
 `06-data/data-dictionary.md`'s note on `user.password_hash`: the concrete hashing algorithm is
-swappable without ever touching `AuthenticateUserUseCase` or `CreateUserUseCase`.
+swappable without ever touching a use case.
 
 ---
 
 ## The Use Case (Application Service)
 
 The use case orchestrates the domain. It calls driven ports. It contains no business rule that
-belongs to an Aggregate — those rules live in the domain model (`User.authenticate(...)`,
-`INV-004`, `INV-005`), not copy-pasted into the use case.
+belongs to an Aggregate — those rules live in the domain model, not copy-pasted into the use case.
 
 ```java
-// application/usecase/AuthenticateUserUseCase.java
+// application/usecase/DoSomethingWithXxxUseCase.java
 @Service
-public class AuthenticateUserUseCase {
+public class DoSomethingWithXxxUseCase {
 
-    private final UserRepository userRepository;
-    private final PasswordHasher passwordHasher;
-    private final TokenProvider tokenProvider;
-    private final SessionRepository sessionRepository;
-    private final RegisterLoginErrorUseCase registerLoginErrorUseCase;
+    private final XxxRepository xxxRepository;
+    // ...one field per port this operation actually needs
 
-    public AuthenticateUserUseCase(UserRepository userRepository,
-                                    PasswordHasher passwordHasher,
-                                    TokenProvider tokenProvider,
-                                    SessionRepository sessionRepository,
-                                    RegisterLoginErrorUseCase registerLoginErrorUseCase) {
-        this.userRepository = userRepository;
-        this.passwordHasher = passwordHasher;
-        this.tokenProvider = tokenProvider;
-        this.sessionRepository = sessionRepository;
-        this.registerLoginErrorUseCase = registerLoginErrorUseCase;
+    public DoSomethingWithXxxUseCase(XxxRepository xxxRepository) {
+        this.xxxRepository = xxxRepository;
     }
 
-    public AuthenticationResult execute(AuthenticateUserCommand command) {
-        // 1. Load the aggregate (through the port — this class does not know it is MySQL)
-        User user = userRepository.findByEmail(command.email())
-            .orElseThrow(() -> {
-                registerLoginErrorUseCase.execute(LoginErrorType.USER_NOT_FOUND, null, command.ip());
-                return new UserNotFoundException();
-            });
+    public XxxResult execute(XxxCommand command) {
+        // 1. Load the aggregate (through the port — this class does not know which database it is)
+        Xxx xxx = xxxRepository.findById(command.id()).orElseThrow(XxxNotFoundException::new);
 
-        // 2. Business logic lives in the Aggregate, not here — INV-005: BLOCKED cannot authenticate
-        if (!passwordHasher.matches(command.rawPassword(), user.passwordHash())) {
-            user.registerFailedAttempt(); // may transition status to BLOCKED — see INV-005
-            userRepository.save(user);
-            registerLoginErrorUseCase.execute(LoginErrorType.INVALID_PASSWORD, user.id(), command.ip());
-            throw new InvalidCredentialsException();
-        }
-        user.registerSuccessfulLogin(); // resets failed_login_attempts to 0
+        // 2. Business logic lives in the Aggregate, not here
+        xxx.doSomething(command);
 
         // 3. Persist the updated aggregate state
-        userRepository.save(user);
+        xxxRepository.save(xxx);
 
-        // 4. Issue tokens and open a session (through ports — no JWT library imported here)
-        Session session = Session.open(user.id(), command.ip(), command.userAgent());
-        sessionRepository.save(session);
-        String accessToken = tokenProvider.issueAccessToken(user.id(), user.permissionCodes());
-        String refreshToken = tokenProvider.issueRefreshToken(session.id());
-
-        return new AuthenticationResult(accessToken, refreshToken);
+        return XxxResult.from(xxx);
     }
 }
 ```
+
+**Example (`security-service`):** `AuthenticateUserUseCase` follows this shape, coordinating
+`UserRepository`, `PasswordHasher`, `TokenProvider`, `SessionRepository`, and
+`RegisterLoginErrorUseCase` to authenticate a user — but the business rule that a `BLOCKED`
+account cannot authenticate again (`INV-005`) lives on `User` itself, not inside this use case.
+The use case only calls `user.registerFailedAttempt()` and reacts to what the aggregate decides.
 
 ---
 
@@ -468,9 +448,11 @@ adapter/ (infrastructure) → application/ → domain/
                                 CANNOT import anything from application/ or adapter/
 ```
 
-Concretely for this project: `domain/model/User.java` never imports `jakarta.persistence.*`,
-`org.springframework.*`, or anything from `adapter/`. If a domain class needs an `@Entity`
-annotation to compile, that class is not in `domain/` — it belongs in
+Concretely: `domain/model/Xxx.java` never imports `jakarta.persistence.*`,
+`org.springframework.*`, or anything from `adapter/`, in any of the six services. If a domain
+class needs an `@Entity` annotation to compile, that class is not in `domain/` — it belongs in
+`adapter/out/persistence/entity/`. **Example (`security-service`):** `domain/model/User.java`
+imports nothing from Spring or JPA — the `@Entity` annotation lives on `UserEntity` instead, in
 `adapter/out/persistence/entity/`.
 
 ### Dependency inversion (DI) in practice
@@ -478,19 +460,19 @@ annotation to compile, that class is not in `domain/` — it belongs in
 ```java
 // ✓ Correct — the port lives in application/, the adapter implements it
 // In application/port/out/:
-public interface UserRepository { ... }
+public interface XxxRepository { ... }
 
 // In adapter/out/persistence/:
 @Component
-public class UserRepositoryAdapter implements UserRepository { ... }
+public class XxxRepositoryAdapter implements XxxRepository { ... }
 
 // Spring's IoC container wires them together automatically by type at startup —
-// there is no manual container.ts to maintain, but the direction of the dependency
-// is identical to the manual-DI version: the use case asks for UserRepository (the
-// interface), Spring hands it a UserRepositoryAdapter (the implementation) at runtime.
+// there is no manual composition root to maintain, but the direction of the dependency
+// is identical either way: the use case asks for the port (the interface), Spring hands
+// it the adapter (the implementation) at runtime.
 @Service
-public class AuthenticateUserUseCase {
-    public AuthenticateUserUseCase(UserRepository userRepository, /* ... */) { ... }
+public class DoSomethingWithXxxUseCase {
+    public DoSomethingWithXxxUseCase(XxxRepository xxxRepository, /* ... */) { ... }
 }
 ```
 
@@ -501,57 +483,44 @@ public class AuthenticateUserUseCase {
 Hexagonal architecture is ideal for TDD because:
 
 1. **The domain is testable without framework mocks.** No Spring context, no database, no MQTT
-   broker needs to start to test `User`'s business logic.
+   broker needs to start to test a domain model's business logic.
 
-2. **Driven ports can be faked easily.** In tests, an in-memory `UserRepository` implementation
-   replaces `UserRepositoryAdapter` — no `@DataJpaTest`, no test database.
+2. **Driven ports can be faked easily.** In tests, an in-memory port implementation replaces the
+   real adapter — no `@DataJpaTest`, no test database.
 
 3. **Invariants are explicit** and tested in isolation.
 
 ```java
 // Domain unit test — zero external dependencies, zero Spring annotations
-class UserTest {
+class XxxTest {
 
     @Test
-    void blockedAccountCannotAuthenticateAgain() {
-        User user = User.register(personId, "some-hash", email);
-        for (int i = 0; i < MAX_ATTEMPTS; i++) {
-            user.registerFailedAttempt();
-        }
-        assertEquals(UserStatus.BLOCKED, user.status()); // INV-005
-
-        assertThrows(AccountBlockedException.class, user::assertCanAuthenticate);
-    }
-
-    @Test
-    void successfulLoginResetsFailedAttempts() {
-        User user = User.register(personId, "some-hash", email);
-        user.registerFailedAttempt();
-        user.registerSuccessfulLogin();
-        assertEquals(0, user.failedLoginAttempts());
+    void enforcesItsOwnInvariant() {
+        Xxx xxx = Xxx.create(/* ... */);
+        assertThrows(SomeDomainException.class, () -> xxx.doSomethingInvalid());
     }
 }
 
-// Use case test with a FAKE repository (not a real DB, not @DataJpaTest)
-class AuthenticateUserUseCaseTest {
+// Use case test with a FAKE port (not a real DB, not @DataJpaTest)
+class DoSomethingWithXxxUseCaseTest {
 
     @Test
-    void savesTheUpdatedUserAndIssuesTokensOnSuccess() {
-        InMemoryUserRepository fakeUserRepo = new InMemoryUserRepository();
-        fakeUserRepo.save(existingUser);
-        PasswordHasher fakeHasher = (raw, hash) -> true; // stubbed, matches always
-        TokenProvider fakeTokenProvider = new InMemoryTokenProvider();
+    void savesTheUpdatedAggregate() {
+        InMemoryXxxRepository fakeRepo = new InMemoryXxxRepository();
+        fakeRepo.save(existingXxx);
+        DoSomethingWithXxxUseCase useCase = new DoSomethingWithXxxUseCase(fakeRepo);
 
-        AuthenticateUserUseCase useCase = new AuthenticateUserUseCase(
-            fakeUserRepo, fakeHasher, fakeTokenProvider, fakeSessionRepo, registerLoginErrorUseCase);
+        useCase.execute(new XxxCommand(/* ... */));
 
-        AuthenticationResult result = useCase.execute(new AuthenticateUserCommand(email, "pw"));
-
-        assertNotNull(result.accessToken());
-        assertEquals(0, fakeUserRepo.findByEmail(email).get().failedLoginAttempts());
+        assertEquals(expectedState, fakeRepo.findById(id).get().state());
     }
 }
 ```
+
+**Example (`security-service`):** `UserTest.blockedAccountCannotAuthenticateAgain()` registers
+enough failed attempts to trigger `INV-005` and asserts `User` transitions to `BLOCKED` — with no
+Spring context and no database. `AuthenticateUserUseCaseTest` then verifies the use case behaves
+correctly against an `InMemoryUserRepository` and a stubbed `PasswordHasher`, never a real one.
 
 > See the full TDD guide in `11-quality/tdd-guide.md`.
 
@@ -580,8 +549,8 @@ When reviewing a PR or a new service, verify:
 | Anti-pattern                                                                                                      | Why it is bad                                                                                                                                          | Solution                                                                                   |
 | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
 | `import jakarta.persistence.Entity` on a class in `domain/model/`                                                 | Couples the domain to JPA — the domain now cannot exist without a JPA provider on the classpath                                                        | Keep `@Entity` classes in `adapter/out/persistence/entity/`; map with a dedicated Mapper   |
-| Business logic in the Controller (e.g. checking `failedLoginAttempts` in `AuthController`)                        | If the endpoint changes, the business rule silently changes with it, and no other entry point (a future MQTT consumer, a batch job) gets the same rule | Move the rule into the `User` aggregate as a method, called from the use case              |
-| A `*RepositoryAdapter` returning `UserEntity` instead of `User` from a method typed as `UserRepository`           | Breaks the contract — the domain would receive a JPA-managed object it cannot validate its own invariants against                                      | The Mapper always converts before returning from the adapter                               |
+| Business logic in the Controller (e.g. checking a business rule before calling the use case)                     | If the endpoint changes, the business rule silently changes with it, and no other entry point (a future MQTT consumer, a batch job) gets the same rule | Move the rule into the Aggregate as a method, called from the use case                     |
+| A `*RepositoryAdapter` returning `XxxEntity` instead of `Xxx` from a method typed as `XxxRepository` | Breaks the contract — the domain would receive a JPA-managed object it cannot validate its own invariants against | The Mapper always converts before returning from the adapter |
 | A use case with 8+ port dependencies in its constructor                                                           | It is probably doing more than one business operation                                                                                                  | Split into smaller use cases, one operation each                                           |
 | Catching a domain exception inside every Controller method                                                        | Duplicates the same mapping logic six, eight, sixteen times across the service                                                                         | One `@ControllerAdvice` in `infrastructure/exception/` maps every domain exception once    |
 | A new `port/in` interface added "just in case" for a use case with one implementation and no plan to add a second | Adds indirection with no benefit — the opposite of what this project already decided for `port/in`                                                     | Keep the use case class as the driving port unless a concrete need to substitute it exists |
