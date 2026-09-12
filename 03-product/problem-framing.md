@@ -67,7 +67,7 @@ Greater difficulty in controlling electricity expenses, identifying unnecessary 
 
 ## How Do They Currently Solve the Problem?
 
-One of the current approaches is for users to consult the information available in the application and manually register their consumption data. The scope of the project specifically considers manual data registration and monitoring based on the established consumption thresholds.
+One current approach involves users checking energy consumption data available within the application. The project scope specifically covers the manual setting of thresholds—or the use of default thresholds—and monitoring based on these established consumption limits.
 
 ## Why Is It Worth Solving?
 
@@ -114,5 +114,5 @@ Users in Colombian households have difficulties knowing, understanding, and cont
 | **What problem do they have?**      | Difficulty knowing, understanding, and controlling their electricity consumption.                                            |
 | **When does it occur?**             | During daily electricity use, especially when consumption is high or unexpected.                                             |
 | **What is the impact?**             | Higher costs, inefficient consumption, difficulty making decisions, and environmental impact.                                |
-| **How do they currently solve it?** | Mainly through the information provided on their electricity bill and manual consumption registration.                       |
+| **How do they currently solve it?** | By manually setting thresholds—or using predefined ones—and monitoring based on these established consumption limits.        |
 | **Why is it worth solving?**        | To improve consumption control, promote responsible habits, facilitate informed decisions, and contribute to energy savings. |
