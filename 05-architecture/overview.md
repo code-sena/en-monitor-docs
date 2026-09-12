@@ -33,7 +33,7 @@ C4Container
     }
 
     Container_Boundary(gateway, "Entry point") {
-        Container(apiGateway, "API Gateway", "Not yet decided", "Single entry point routing to services — see Open questions below")
+        Container(apiGateway, "API Gateway", "Spring Cloud Gateway", "Single entry point routing to services — see ADR-004-api-gateway.md")
     }
 
     Container_Boundary(services, "Microservices — Java 21 + Spring Boot") {
@@ -134,10 +134,9 @@ not each other:
   `02-domain/domain-events.md`. The broker itself is **not yet selected**; only the measuring
   hardware is currently in hand (`01-context/scope.md`, feature #11).
 
-- **Gateway:** **not yet decided.** No API Gateway product has been chosen — clients currently
-  have no single documented entry point, which is one of the five common architecture mistakes
-  this section's own README warns against. This needs its own ADR (`ADR-004-api-gateway.md`,
-  following the numbering already in use for `ADR-002` and `ADR-003`).
+- **Gateway:** Spring Cloud Gateway, per `ADR-004-api-gateway.md`. Both clients call it as their
+  single entry point; it routes to the six backend services and verifies each request's access
+  token per `ADR-005-authentication-strategy.md`, instead of every service duplicating that check.
 
 ---
 
@@ -147,7 +146,6 @@ These are gaps found while writing this document, not decisions made here:
 
 | Question                                                                                               | Where it should be resolved                                                                                         |
 | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| Which API Gateway (or none, with services exposed directly)?                                           | New ADR — `ADR-004-api-gateway.md`                                                                                  |
 | Which MQTT broker, and its topic/payload contract with devices?                                        | `01-context/scope.md`, feature #11 (already flagged there as not yet designed)                                      |
 | Which push notification provider delivers alerts/recommendations (`01-context/scope.md`, feature #15)? | Not yet assigned a document — likely a new ADR if the choice is hard to reverse, or `cross-cutting.md` if it is not |
 
