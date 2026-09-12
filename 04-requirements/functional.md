@@ -22,13 +22,13 @@
 
 ## RF2 — Project Management
 
-| ID     | Module             | Description                                                                                                                                                                      | Source (HU) | Priority |
-| ------ | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | -------- |
-| ERF2.1 | Project Management | The system must let the responsible user register a project (e.g. a house, a building, a company)                                                                                | HU2         | High     |
-| ERF2.2 | Project Management | The system must assign permissions based on the user's role (regular user or responsible user), determining what actions they can perform, such as managing devices and projects | HU2         | High     |
-| ERF2.3 | Project Management | The responsible user registers and links devices to the project, and links (regular) users to the project                                                                        | HU2         | High     |
-| ERF2.4 | Project Management | Every project or home must have one responsible user in charge of managing all its devices; this role holds the platform's advanced permission for that project                  | HU2         | High     |
-| ERF2.5 | Project Management | The system must let any user with access mark a project or home as a favorite, to speed up access to it                                                                          | HU2         | High     |
+| ID     | Module             | Description                                                                                                                                                               | Source (HU) | Priority |
+| ------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | -------- | --- | --- | ---- |
+| ERF2.1 | Project Management | The system must let the Home Owner register a project (e.g. a house, a building, a company)                                                                               | HU2         | High     |
+| ERF2.2 | Project Management | The system must assign permissions based on the user's role (Home Member or Home Owner), determining what actions they can perform, such as managing devices and projects | HU2         | High     |
+| ERF2.3 | Project Management | The Homer Owner registers and links devices to the project, and links Home Member to the project                                                                          | HU2         | High     |
+| ERF2.4 | Project Management | Every project or home must have one Home Owner in charge of managing all its devices; this role holds the platform's advanced permission for that project                 | HU2         | High     |
+| ERF2.5 | Project Management | The system must let any user with access mark a project or home as a favorite, to speed up access to it                                                                   | HU2         | High     |     | HU2 | High |
 
 ## RF3 — System Configuration
 
