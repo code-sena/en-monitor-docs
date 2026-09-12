@@ -42,7 +42,7 @@ serves a different moment of use.
 | Layer | Technology | Justification |
 |-------|-----------|---------------|
 | Measuring hardware | ESP32 + PZEM-004T V3 + HLK-PM03 | The PZEM measures real electrical magnitudes rather than estimating them; the ESP32 provides Wi-Fi connectivity and enough capacity to report measurements autonomously; the HLK-PM03 allows the device to be powered from the same mains circuit it monitors |
-| Device communication | MQTT over Wi-Fi | Designed for constrained devices and unreliable networks; the publish/subscribe model decouples devices from the backend, so neither needs to know the other's internal implementation |
+| Device communication | MQTT over Wi-Fi, via Eclipse Mosquitto (`ADR-007-mqtt-broker-selection.md`) | Designed for constrained devices and unreliable networks; the publish/subscribe model decouples devices from the backend, so neither needs to know the other's internal implementation. Mosquitto's low resource footprint fits a two-person team's development environment |
 | Web frontend | React + Vite | The component-based model fits a dashboard with charts and reusable views; the ecosystem also provides mature support for internationalization and data visualization |
 | Android mobile application | React Native (Android only) | Shares language, component model, and mental model with the web client, so the team maintains one set of skills instead of two; produces a native Android application. iOS is not targeted and is not planned |
 | Backend | Java 21 + Spring Boot | Spring Security and OAuth2 cover the identity requirements without building them from scratch; the ecosystem supports the hexagonal architecture required by the project |
