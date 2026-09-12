@@ -3,7 +3,7 @@
 - **ID:** ADR-004
 - **Date:** 2026-09-11
 - **Status:** Accepted
-- **Authors:** Juan Esteban Cortés Parra y Miguel Angel Garcia.
+- **Authors:** Juan Esteban Cortés Parra and Miguel Angel Garcia.
 
 ---
 
