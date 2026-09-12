@@ -19,7 +19,7 @@ flowchart TB
             meas[measurement-service]
             alertsvc[alert-service]
             rec[recommendation-service]
-            mqttbroker[MQTT broker — not yet selected]
+            mqttbroker[MQTT broker — Eclipse Mosquitto, per ADR-007]
             kafkabroker[Kafka]
             mysql[(MySQL 8 — shared instance)]
             web[web application — React static build]
@@ -60,7 +60,7 @@ not part of the stack**; there is no orchestrator beyond Docker itself.
 | -------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | `security-service` … `recommendation-service` (×6) | Java 21 + Spring Boot, one image per service     | Built and deployed independently, each from its own repository and Jenkins pipeline                                     |
 | `mysql`                                            | MySQL 8                                          | Single shared instance — see `ADR-003-shared-database.md` and the access-boundary rule in `06-data/models.md` |
-| MQTT broker                                        | Not yet selected                                 | See Open questions                                                                                                      |
+| MQTT broker                                        | Eclipse Mosquitto                                | See `ADR-007-mqtt-broker-selection.md`                                                                                   |
 | Kafka                                              | Apache Kafka                                     | See `ADR-002-domain-event-transport.md`                                                                                 |
 | `web`                                              | React + Vite production build, served statically | —                                                                                                                       |
 | API Gateway                                        | Spring Cloud Gateway                             | See `ADR-004-api-gateway.md`                                                                                             |
@@ -128,7 +128,6 @@ These are gaps found while writing this document, not decisions made here:
 | Question                                                                                                   | Impact                                                                                                                                  |
 | ---------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | Where does Production actually run (a SENA-provided machine, a developer's own machine, a free-tier host)? | Determines the rest of this document's network configuration and hardware requirements sections                                         |
-| Which MQTT broker?                                                                                         | Blocks finalizing the "What goes in Docker" and "Network configuration" sections; already flagged in `01-context/scope.md`, feature #11 |
 | Container resource sizing (CPU/RAM/disk per service)                                                       | Cannot be set meaningfully before the hosting target is known                                                                           |
 | TLS termination and port allocation                                                                        | Depends on the Gateway and hosting decisions above                                                                                      |
 
