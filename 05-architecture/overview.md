@@ -46,7 +46,7 @@ C4Container
     }
 
     ContainerDb(mysql, "Shared database", "MySQL 8", "One physical instance, organized logically by bounded context — see ADR-003-shared-database.md")
-    ContainerQueue(mqtt, "MQTT broker", "Not yet selected — see scope.md, feature #11", "Device-to-backend telemetry ingestion")
+    ContainerQueue(mqtt, "MQTT broker", "Eclipse Mosquitto", "Device-to-backend telemetry ingestion — see ADR-007-mqtt-broker-selection.md")
     ContainerQueue(kafka, "Kafka", "Apache Kafka", "Inter-service domain events — see ADR-002-domain-event-transport.md")
 
     Rel(owner, webApp, "Uses", "HTTPS")
@@ -146,7 +146,6 @@ These are gaps found while writing this document, not decisions made here:
 
 | Question                                                                                               | Where it should be resolved                                                                                         |
 | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| Which MQTT broker, and its topic/payload contract with devices?                                        | `01-context/scope.md`, feature #11 (already flagged there as not yet designed)                                      |
 | Which push notification provider delivers alerts/recommendations (`01-context/scope.md`, feature #15)? | Not yet assigned a document — likely a new ADR if the choice is hard to reverse, or `cross-cutting.md` if it is not |
 
 ---
