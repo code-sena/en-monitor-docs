@@ -59,9 +59,9 @@ not part of the stack**; there is no orchestrator beyond Docker itself.
 | Container                                          | Image basis                                      | Notes                                                                                                                   |
 | -------------------------------------------------- | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | `security-service` … `recommendation-service` (×6) | Java 21 + Spring Boot, one image per service     | Built and deployed independently, each from its own repository and Jenkins pipeline                                     |
-| `mysql`                                            | MySQL 8                                          | Single shared instance — see `ADR-003-shared-database.md` (pending) and the access-boundary rule in `06-data/models.md` |
+| `mysql`                                            | MySQL 8                                          | Single shared instance — see `ADR-003-shared-database.md` and the access-boundary rule in `06-data/models.md` |
 | MQTT broker                                        | Not yet selected                                 | See Open questions                                                                                                      |
-| Kafka                                              | Apache Kafka                                     | See `ADR-002-domain-event-transport.md` (pending)                                                                       |
+| Kafka                                              | Apache Kafka                                     | See `ADR-002-domain-event-transport.md`                                                                                 |
 | `web`                                              | React + Vite production build, served statically | —                                                                                                                       |
 | API Gateway                                        | Not yet decided                                  | See Open questions                                                                                                      |
 
@@ -139,7 +139,7 @@ These are gaps found while writing this document, not decisions made here:
 ## Correlations
 
 - Container-level architecture and communication patterns → `05-architecture/overview.md`
-- Shared-database decision → `ADR-003-shared-database.md` (`05-architecture/decisions/records/`, pending)
-- Kafka transport decision → `ADR-002-domain-event-transport.md` (`05-architecture/decisions/records/`, pending)
+- Shared-database decision → `ADR-003-shared-database.md` (`05-architecture/decisions/records/`)
+- Kafka transport decision → `ADR-002-domain-event-transport.md` (`05-architecture/decisions/records/`)
 - Environments and constraints (budget, timeline, team) → `01-context/scope.md`
 - Database migrations repository (Liquibase) → `06-data/migration-strategy.md`

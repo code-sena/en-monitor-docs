@@ -45,9 +45,9 @@ C4Container
         Container(recommendation, "recommendation-service", "Spring Boot", "Consumption-based suggestions")
     }
 
-    ContainerDb(mysql, "Shared database", "MySQL 8", "One physical instance, organized logically by bounded context — see ADR-003 (pending)")
+    ContainerDb(mysql, "Shared database", "MySQL 8", "One physical instance, organized logically by bounded context — see ADR-003-shared-database.md")
     ContainerQueue(mqtt, "MQTT broker", "Not yet selected — see scope.md, feature #11", "Device-to-backend telemetry ingestion")
-    ContainerQueue(kafka, "Kafka", "Apache Kafka", "Inter-service domain events — see ADR-002 (pending)")
+    ContainerQueue(kafka, "Kafka", "Apache Kafka", "Inter-service domain events — see ADR-002-domain-event-transport.md")
 
     Rel(owner, webApp, "Uses", "HTTPS")
     Rel(owner, androidApp, "Uses", "HTTPS")
@@ -121,7 +121,7 @@ not each other:
   - `measurement-service` → `device-service`: validates `deviceId` against its `apiKey` before
     accepting a published measurement.
 
-- **Async (Kafka — domain events between services, pending `ADR-002-domain-event-transport.md`):**
+- **Async (Kafka — domain events between services, per `ADR-002-domain-event-transport.md`):**
   - `measurement-service` publishes `MeasurementRecorded` (topic `monitoring.measurement-recorded`),
     consumed by `alert-service` and `recommendation-service`.
   - `device-service` publishes `DeviceConnectivityLost` (topic `devices.device-connectivity-lost`),
@@ -159,7 +159,7 @@ These are gaps found while writing this document, not decisions made here:
   patterns) → `02-domain/domain-map.md`
 - Domain events referenced above → `02-domain/domain-events.md`
 - Full stack decisions and justifications → `01-context/overview.md`
-- Shared-database decision → `ADR-003-shared-database.md` (`05-architecture/decisions/records/`, pending)
-- Kafka transport decision → `ADR-002-domain-event-transport.md` (`05-architecture/decisions/records/`, pending)
+- Shared-database decision → `ADR-003-shared-database.md` (`05-architecture/decisions/records/`)
+- Kafka transport decision → `ADR-002-domain-event-transport.md` (`05-architecture/decisions/records/`)
 - Table-level detail per service → `06-data/models.md`
 - How this is actually deployed → `05-architecture/deployment.md`
