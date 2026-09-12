@@ -25,7 +25,7 @@ ADRs document important architectural decisions. Each file = one decision.
 | ADR-003 | Shared Physical Database                   | Accepted   | 2026-09-10 |
 | ADR-004 | API Gateway Selection                      | Accepted   | 2026-09-11 |
 | ADR-005 | Authentication Strategy                    | Accepted   | 2026-09-10 |
-| ADR-006 | Database Migrations Repository Structure   | Proposed   | 2026-09-10 |
+| ADR-006 | Database Migrations Repository Structure   | Accepted   | 2026-09-10 |
 | ADR-007 | MQTT Broker Selection                      | Accepted   | 2026-09-11 |
 
 > Add rows here as you create ADRs in `records/`. Keep the table in numeric order, not commit
