@@ -10,9 +10,9 @@ The problem mainly affects users in Colombian households who consume electricity
 
 Within the system, two main types of users are identified:
 
-**Common User:** A person who interacts with the application to view information related to their energy consumption, register data, establish consumption limits, view reports, and receive recommendations.
+**Home Member:** A person who interacts with the application to view information related to their energy consumption, register data, establish consumption limits, view reports, and receive recommendations.
 
-**Responsible User:** A person responsible for managing a household, including the management of devices and linked users.
+**Home Owner:** A person responsible for managing a household, including the management of devices and linked users.
 
 Therefore, the affected user can be characterized as:
 
