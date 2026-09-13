@@ -15,9 +15,7 @@
 | Team                    | 2 developers (Juan Esteban Cortés Parra, Miguel Ángel García Artunduaga) | `01-context/overview.md`                                 |
 | Sprint length           | 1 week (assumed — `agile-conventions.md` has this as an open field)      | To confirm with the team                                 |
 | Current status          | In development. Next milestone: build the `Security` bounded context     | `01-context/overview.md`                                 |
-| Key external dependency | PZEM-004T V3 hardware units expected **June 15, 2026**                   | `01-context/scope.md`                                    |
-
-Every phase after Phase 1 depends on the one before it — `Security` is a hard prerequisite for every other context because all of them need to know who the user is.
+| Key external dependency | PZEM-004T V3 hardware units expected **September 15, 2026**              | `01-context/scope.md`                                    |
 
 ---
 
@@ -36,7 +34,7 @@ data actually flows end to end.
 - Register a measuring device, associate it with a home, authenticate it with an API key
   (`Devices`)
 - MQTT broker selection and the topic/payload contract between device and backend
-  (`Monitoring and Measurements`) — **blocked on hardware arrival (June 15)**; the contract can
+  (`Monitoring and Measurements`) — **blocked on hardware arrival (September 15)**; the contract can
   be designed and stubbed before the physical units arrive
 - Idempotent ingestion of voltage, current, active power, and energy readings over MQTT
   (`Monitoring and Measurements`)
@@ -61,6 +59,8 @@ get warned when something is off.
 - Threshold-exceeded alerts and device-stopped-reporting alerts, with an alert lifecycle
   (raised → resolved) (`Alerts`)
 - Push notifications for alerts, in addition to in-app surfacing (`Alerts`)
+- Access and refresh tokens, session management (`Security`)
+- System roles and RBAC enforced on protected endpoints (`Security`)
 - Audit log for security-relevant actions (`Security`)
 - Web dashboard: charts and history views (`Frontend — React`)
 - Mobile: consumption and alerts screens (`Mobile — React Native`)
@@ -75,6 +75,7 @@ web and mobile, and a push notification is delivered.
 Goal: close the product loop with proactive guidance, and finish the cross-cutting UI work that
 was deferred while the core loop was being built.
 
+- Security configuration (lockout rules, session duration) and account lockout (`Security`)
 - Recommendations generated from a home's own measured consumption behavior (`Recommendations`)
 - Recommendation delivery through the same push channel as alerts (`Recommendations`)
 - Interface fully internationalized with `react-i18next` (`Frontend — React`)
