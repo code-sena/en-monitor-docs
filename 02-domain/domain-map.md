@@ -1,142 +1,192 @@
 # Domain Map — Bounded Contexts
 
-> **What to fill in here:** The domain map is the central DDD (Domain-Driven Design) artifact.
-> It defines the system's boundaries and how they relate to each other.
-> Build it first with the team and domain experts in an Event Storming session.
-
-## Before filling in this document: Event Storming
-
-**Event Storming** is a collaborative workshop for modeling the domain before writing code.
-It lasts 2–4 hours with the whole team (dev + PO + business expert).
-
-**Materials:** Long wall, 4-color sticky notes, markers.
-
-**Standard colors:**
-| Color | Represents | Example |
-|-------|-----------|---------|
-| 🟠 Orange | **Domain events** (something that happened, past tense) | `AppointmentScheduled`, `PaymentReceived` |
-| 🔵 Blue | **Commands** (action that triggers the event) | `ScheduleAppointment`, `ProcessPayment` |
-| 🟡 Yellow | **Actors** (who executes the command) | `Patient`, `Doctor`, `Admin` |
-| 🩷 Pink | **External systems** or integration points | `Payment Gateway`, `Email SMTP` |
-
-**Session steps:**
-1. (30 min) Post all events that occur in the business, in chronological order, on the wall
-2. (30 min) Identify which command or actor triggers each event
-3. (45 min) Group related events — each group is a candidate Bounded Context
-4. (30 min) Draw relationships between Bounded Contexts (who depends on whom)
-5. (30 min) Discuss the resulting map and agree on names
-
-**Result:** The session output directly feeds the 3 documents in `02-domain/`:
-- Identified events → `domain-events.md`
-- Entities and their rules → `entities-and-rules.md`
-- Bounded Contexts and their map → this document
-
----
-
 ---
 
 ## 1. Domain overview
 
-> One paragraph of context about the business and what problem the system solves.
-> Write it without technical terms — it must be readable by a business expert.
+Energy Monitor manages the full cycle of measuring, understanding, and reacting to a household's
+electricity consumption. It starts when a home is registered and a measuring device is attached
+to a specific appliance or load; from there, the system needs to know who owns that data, collect
+real electrical readings automatically, classify how much a home is consuming, and react to that
+behavior with alerts and recommendations.
 
-```
-[Describe the business domain here. E.g.: "The system manages the complete cycle of
-[X] reservations, from the customer's request through to confirmation and billing."]
-```
+Each of these responsibilities is kept in a separate area of the domain on purpose: they change
+for different reasons and at different speeds. Registering a new home does not require touching
+how consumption is classified. Changing how a recommendation is generated should never require
+touching who is allowed to log in.
 
 ---
 
 ## 2. Identified Bounded Contexts
 
-A **Bounded Context** is the explicit boundary within which a particular domain model
-has consistent meaning. Each bounded context has its own Ubiquitous Language.
-
-> **Signs of a good bounded context:**
-> - Has a clear responsible team
-> - Has its own database
-> - Can be deployed independently
-> - The same term in two different contexts can mean different things
-
-### Bounded Context: [Name — e.g.: User Management]
+### Bounded Context: Security
 
 | Field | Value |
 |-------|-------|
-| **Name** | [ContextName] |
-| **Responsibility** | [What this context captures in one sentence] |
-| **Owning team** | [Responsible team or person] |
-| **Microservice(s)** | [service-name, service2-name] |
-| **Database** | [PostgreSQL / MongoDB / Redis / etc.] |
-| **Ubiquitous Language** | [Key business terms in this context] |
+| **Name** | Security |
+| **Responsibility** | Knows who a user is, whether their credentials are valid, what they are allowed to do, and keeps a record of security-relevant actions |
+| **Owning team** | Juan Cortes |
+| **Microservice(s)** | `security-service` |
+| **Database** | Shared MySQL instance; owns the tables under the identity/access domain |
+| **Ubiquitous Language** | `Person`, `User`, `Credentials`, `Session`, `Access Token`, `Refresh Token`, `Password Reset Token`, `Password Policy`, `System Role`, `Permission`, `RBAC`, `Audit Log`. Full definitions in `01-context/glossary.md`. |
 
-**Context-specific terms (Ubiquitous Language):**
+**Context-specific terms:**
 
 | Term | Meaning in THIS context | Different in another context? |
-|------|------------------------|-------------------------------|
-| [User] | [Person with an active account] | [Yes — in Billing it's "Client"] |
-| [Account] | [Set of credentials] | [No] |
+|------|--------------------------|-------------------------------|
+| Role | `System Role` — a global permission grouping | Yes — in Home Management, "role" means `Home Role` (`OWNER`/`MEMBER`), scoped to one home only |
 
 ---
 
-### Bounded Context: [Name — e.g.: Order Management]
+### Bounded Context: Home Management
 
 | Field | Value |
 |-------|-------|
-| **Name** | [ContextName] |
-| **Responsibility** | |
-| **Owning team** | |
-| **Microservice(s)** | |
-| **Database** | |
-| **Ubiquitous Language** | |
+| **Name** | Home Management |
+| **Responsibility** | Groups devices, members, and thresholds under a home, and manages who belongs to which home and with what role |
+| **Owning team** | Miguel Garcia |
+| **Microservice(s)** | `home-service` |
+| **Database** | Shared MySQL instance; owns the tables under the home domain |
+| **Ubiquitous Language** | `Home`, `Home Type`, `Access Code`, `Home Role`, `Threshold`. Full definitions in `01-context/glossary.md`. |
+
+**Context-specific terms:**
+
+| Term | Meaning in THIS context | Different in another context? |
+|------|--------------------------|-------------------------------|
+| Role | `Home Role` — scoped to one specific home (`OWNER`/`MEMBER`) | Yes — in Security, "role" means `System Role`, global to the platform |
+
+---
+
+### Bounded Context: Devices
+
+| Field | Value |
+|-------|-------|
+| **Name** | Devices |
+| **Responsibility** | Registers measuring devices, associates each one with a home, authenticates them, and tracks their connectivity |
+| **Owning team** | Juan Cortes |
+| **Microservice(s)** | `device-service` |
+| **Database** | Shared MySQL instance; owns the tables under the device domain |
+| **Ubiquitous Language** | `Device`, `Appliance`, `Appliance Type`, `Device Status`, `API Key`. Full definitions in `01-context/glossary.md`. |
+
+**Context-specific terms:**
+
+| Term | Meaning in THIS context | Different in another context? |
+|------|--------------------------|-------------------------------|
+| Device | The physical measuring unit — the thing that measures | Distinct from `Appliance`, which is the load being measured. Both terms are defined here to be used consistently everywhere else. |
+
+---
+
+### Bounded Context: Monitoring and Measurements
+
+| Field | Value |
+|-------|-------|
+| **Name** | Monitoring and Measurements |
+| **Responsibility** | Receives readings published by devices over MQTT, stores them, and makes consumption history and statistics available |
+| **Owning team** | Miguel Garcia |
+| **Microservice(s)** | `measurement-service` |
+| **Database** | Shared MySQL instance; owns the tables under the measurement domain |
+| **Ubiquitous Language** | `Measurement`, `Voltage`, `Current`, `Active Power`, `Energy`, `Power Factor`, `Consumption`, `Threshold`, `Consumption Level`. Full definitions in `01-context/glossary.md`. |
+
+---
+
+### Bounded Context: Alerts
+
+| Field | Value |
+|-------|-------|
+| **Name** | Alerts |
+| **Responsibility** | Reacts to a measurement or a device going silent by raising and tracking an alert until it is resolved |
+| **Owning team** | Miguel Garcia |
+| **Microservice(s)** | `alert-service` |
+| **Database** | Shared MySQL instance; owns the tables under the alerting domain |
+| **Ubiquitous Language** | `Alert`, `Alert Severity`, `Consumption Level` (consumed, not owned). Full definitions in `01-context/glossary.md`. |
+
+---
+
+### Bounded Context: Recommendations
+
+| Field | Value |
+|-------|-------|
+| **Name** | Recommendations |
+| **Responsibility** | Generates suggestions from a home's own measured consumption behavior, and tracks whether the user has read them |
+| **Owning team** | Juan Cortes |
+| **Microservice(s)** | `recommendation-service` |
+| **Database** | Shared MySQL instance; owns the tables under the recommendation domain |
+| **Ubiquitous Language** | `Recommendation`, `Message Key`. Full definitions in `01-context/glossary.md`. |
 
 ---
 
 ## 3. Context Map
 
-The Context Map shows relationships between bounded contexts. Relationships define
-how contexts communicate and who holds the "power" in the integration.
+```
+┌────────────┐   OHS / PL    ┌──────────────────┐
+│  Security  │──────────────▶│  Home Management │
+│ (identity) │               └──────────────────┘
+│            │                         │
+│            │   OHS / PL              │  U → D
+│            │──────────────▶  ┌───────▼────────┐
+│            │                 │    Devices     │
+└─────┬──────┘                 └───────┬────────┘
+      │ OHS / PL                       │ U → D
+      │                                 ▼
+      │                    ┌─────────────────────────┐
+      └───────────────────▶│ Monitoring and          │
+                            │ Measurements            │
+                            └──────────┬──────────────┘
+                                       │
+                                       │    
+                                       │                
+                          ┌────────────┴────────────┐
+                          ▼                         ▼
+                    ┌──────────┐            ┌────────────────┐
+                    │  Alerts  │            │ Recommendations│
+                    └──────────┘            └────────────────┘
+                         ▲
+                         │  Kafka: DeviceConnectivityLost
+                         │
+                  ┌────────────┐
+                  │   Devices  │
+                  └────────────┘
+```
 
-```
-┌─────────────────────┐        ┌──────────────────────┐
-│  [Context A]        │        │  [Context B]         │
-│                     │──────▶│                      │
-│  Domain:            │  D→C  │  Domain:             │
-│  [responsibility]   │       │  [responsibility]    │
-└─────────────────────┘       └──────────────────────┘
-                                        │
-                               D→C      │
-                                        ▼
-                              ┌──────────────────────┐
-                              │  [Context C]         │
-                              │                      │
-                              │  [responsibility]    │
-                              └──────────────────────┘
-```
+> This diagram only draws the relationships that involve an active integration (an API call, a
+> token claim, or a domain event). `Alert` and `Recommendation` also store `homeId` and, where
+> applicable, `deviceId` as plain foreign references — Home Management and Devices are not called
+> at write time for this, and no arrow is drawn for it. The full list, including these
+> reference-only relationships, is in the table below.
 
 ### Context relationship types
 
 | Type | Symbol | Description | Example |
 |------|--------|-------------|---------|
-| **Upstream → Downstream** | `U → D` | U provides, D consumes. D depends on U. | Auth → Orders |
-| **Shared Kernel** | `SK` | Two teams share part of the model | Shared User ID |
-| **Customer/Supplier** | `C/S` | Supplier (U) negotiates with Customer (D) | Inventory → Sales |
-| **Conformist** | `CONF` | D adopts U's model without negotiating | Legacy integration |
-| **Anti-Corruption Layer** | `ACL` | D translates U's model to protect itself | Gateway → External API |
-| **Open Host Service** | `OHS` | U publishes a published protocol | Event Bus, REST API |
-| **Published Language** | `PL` | Explicit shared language | OpenAPI spec, events |
+| **Upstream → Downstream** | `U → D` | U provides, D consumes. D depends on U. | Devices → Measurements |
+| **Open Host Service** | `OHS` | U publishes a stable, well-defined contract that many contexts can consume | Security → everyone else |
+| **Published Language** | `PL` | The explicit shared contract itself (a claim format, an event schema) | JWT claims, domain events |
+
+This project does not currently use Shared Kernel, Conformist, or Anti-Corruption Layer
+relationships — there is no legacy system to protect against, and no two contexts share a model.
 
 ### Relationships table
 
 | Context A | Relationship | Context B | Communication channel | Contract |
-|-----------|-------------|-----------|----------------------|---------|
-| [Context A] | U → D | [Context B] | REST / Event | OpenAPI / AsyncAPI |
-| [Context B] | ACL | [Context C] | Adapter | Internal interface |
+|-----------|-------------|-----------|------------------------|---------|
+| Security | OHS / PL | Home Management | REST | Access token claims (user identity) |
+| Security | OHS / PL | Devices | REST | Access token claims (user identity) |
+| Security | OHS / PL | Monitoring and Measurements | REST | Access token claims (user identity) |
+| Home Management | U → D | Devices | REST | `homeId` as a foreign reference, not a shared entity |
+| Devices | U → D | Monitoring and Measurements | MQTT + REST | `deviceId` validated through its `apiKey` before a measurement is accepted |
+| Monitoring and Measurements | U → D | Alerts | Kafka (`MeasurementRecorded`, topic `monitoring.measurement-recorded`) | See `domain-events.md` |
+| Monitoring and Measurements | U → D | Recommendations | Kafka (`MeasurementRecorded`, topic `monitoring.measurement-recorded`) | See `domain-events.md` |
+| Devices | U → D | Alerts | Kafka (`DeviceConnectivityLost`, topic `devices.device-connectivity-lost`) | See `domain-events.md` |
+| Home Management | U → D | Alerts | REST | `homeId` as a foreign reference, not a shared entity |
+| Home Management | U → D | Recommendations | REST | `homeId` as a foreign reference, not a shared entity |
+| Devices | U → D | Recommendations | REST | `deviceId` as a foreign reference, not a shared entity |
+
+No context reads another context's database tables directly, even though the physical database
+is shared. Every relationship above goes through an API call, a token claim, or a domain event.
 
 ---
 
 ## 4. Core Domain, Supporting, Generic
-
-DDD classifies subdomains by their strategic value:
 
 | Type | Description | Investment | Example |
 |------|-------------|-----------|---------|
@@ -147,29 +197,31 @@ DDD classifies subdomains by their strategic value:
 ### Classification of this project's bounded contexts
 
 | Bounded Context | Type | Justification |
-|----------------|------|---------------|
-| [Context A] | Core | [why it is the heart of the business] |
-| [Context B] | Supporting | [why it supports without being differentiating] |
-| [Context C] | Generic | [standard solution available] |
+|-----------------|------|----------------|
+| Monitoring and Measurements | Core | This is the reason the system exists: turning raw electrical readings into consumption attributed to a specific appliance, automatically. Nothing about this is off-the-shelf. |
+| Alerts | Core | Timely, actionable feedback while there is still time to act is the value proposition described in `01-context/overview.md` — a generic utility bill cannot do this. |
+| Recommendations | Core | Suggestions based on a home's own measured behavior, not generic advice, is part of the same value proposition as Alerts. |
+| Devices | Supporting | Necessary so a measurement can be trusted and attributed correctly, but registering a device is not itself what the user is paying attention to. |
+| Home Management | Supporting | Necessary organizational scaffolding — grouping devices and people — but not differentiating on its own. |
+| Security | Generic | Identity, authentication, and RBAC are solved problems; the stack justification in `01-context/overview.md` already leans on Spring Security and OAuth2 instead of building this from scratch. |
 
 ---
 
 ## 5. Modeling decisions
 
-### How were these decisions made?
-
-> Document the Event Storming session or the process you used to arrive at the map.
-> If you changed the map, explain why.
-
-- **Event Storming session:** [date], [participants]
-- **Tool used:** [Miro / Lucidchart / physical whiteboard]
-- **Map iterations:** v1 (date), v2 (date)
+No formal, facilitated Event Storming session was run with sticky notes. The boundaries above
+were derived directly from the project's existing class diagram, the entity-relationship model,
+and the domain description already produced before this documentation effort began — that
+material had already gone through several iterations (see the security module redesign in the
+project's own commit history) before it was translated into this format.
 
 ### Key decisions and discarded alternatives
 
 | Decision | Discarded alternative | Reason |
-|----------|----------------------|--------|
-| [Separate Context A and B] | [Have them in one] | [Business logic is different and they evolve at different rates] |
+|----------|------------------------|--------|
+| Keep Security as a single bounded context covering identity, sessions, and authorization | Split into separate Identity, Session, and Authorization contexts | These responsibilities are tightly cohesive around one concern — access — and splitting them further would add inter-service calls for a two-person team without a clear business reason to deploy them independently |
+| Keep Devices separate from Monitoring and Measurements | Merge them into one context, since a device's only purpose is to produce measurements | Device lifecycle (registration, connectivity, hardware association) changes independently from measurement ingestion, which is high-volume and append-only. They also fail independently: a device can go offline without any measurement being lost, and vice versa |
+| Keep Alerts and Recommendations as two contexts instead of one shared "Notifications" context | Merge them, since both react to the same measurement stream | They have different lifecycles (`PENDING`/`RESOLVED` vs. `READ`/`UNREAD`) and are triggered by different logic — a threshold crossing versus a behavioral pattern. `Notification` remains a conceptual umbrella in the glossary, not a bounded context |
 
 ---
 
@@ -177,8 +229,9 @@ DDD classifies subdomains by their strategic value:
 
 1. Before adding a new microservice, verify whether it belongs to an existing bounded context.
 2. If a context's ubiquitous language is changing, review whether the context should be split.
-3. Run an Event Storming session every time the domain changes significantly.
-4. The context map MUST be synchronized with the C4 system-level diagram (`05-architecture/overview.md`).
+3. Revisit this map whenever the domain changes significantly — a new context, a merged one, or a
+   relationship that no longer holds.
+4. The context map MUST stay synchronized with the C4 system-level diagram (`05-architecture/overview.md`).
 
 > **Important correlation:** The bounded contexts in this document →
 > Microservices in `09-microservices/service-catalog.md` →

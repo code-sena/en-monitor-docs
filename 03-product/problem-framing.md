@@ -1,110 +1,118 @@
-# Problem Framing — Problem Definition
+# Problem Framing
 
-> **Why this document exists:** Before designing solutions, the team must be
-> aligned on the problem it solves. This document captures that alignment.
-> A well-defined problem is already halfway to a solution.
+## Introduction
 
----
+This document defines the main problem addressed by the **Electricity Consumption Monitoring System** by identifying who is affected, what the problem is, when it occurs, its impact, how users currently deal with it, and why it is worth solving. This analysis helps establish a clear understanding of the problem before defining the proposed solution.
 
-## 1. The problem in one sentence
+## Who Has the Problem?
 
-> Complete this template:
+The problem mainly affects users in Colombian households who consume electricity and want to understand, control, and optimize their energy consumption.
 
-**[User segment]** who **[usage context]** struggle with **[pain/problem]**
-because **[root cause]**, resulting in **[quantifiable impact]**.
+Within the system, two main types of users are identified:
 
-**Example:**
-> **Mid-sized company inventory operators** who **manage catalogs of more than 500 products**
-> struggle with **stock control across multiple warehouses** because **current systems
-> do not support real-time synchronization**, resulting in **15% of orders with stock errors
-> and 3 hours of manual correction work per day**.
+**Home Member:** A person who interacts with the application to view information related to their energy consumption, register data, establish consumption limits, view reports, and receive recommendations.
 
----
+**Home Owner:** A person responsible for managing a household, including the management of devices and linked users.
 
-## 2. Affected users
+Therefore, the affected user can be characterized as:
 
-| Segment | Description | Estimated size | Priority |
-|---------|-------------|---------------|---------|
-| [Segment A] | [Who they are, what they do] | [N users] | High |
-| [Segment B] | [Who they are] | [N users] | Medium |
+A person who uses electricity at home but does not have sufficiently clear, timely, and detailed information to understand how their consumption is distributed and make decisions to reduce it.
 
-### Jobs-to-be-done (JTBD)
+## What Problem Do They Have?
 
-> What job is the user trying to do when they "hire" our product?
+The main problem is the lack of knowledge and control over electricity consumption within the household.
 
-**When** [situation / context],
-**I want** [motivation / what they are trying to achieve],
-**so that** [expected outcome / benefit].
+Currently, many people mainly know the amount they have to pay on their electricity bill, but their service provider does not necessarily provide detailed information that allows them to determine:
 
----
+- Which devices or appliances consume the most energy.
+- When the highest levels of consumption occur.
+- What their usual consumption patterns are.
+- When there is unusually high consumption.
+- What actions they can take to reduce consumption.
+- How current consumption compares with previous periods.
 
-## 3. Evidence of the problem
+## When Does the Problem Occur?
 
-> The problem must be real. Document the evidence you have.
+The problem mainly occurs during the daily use of electricity at home, especially when users operate different devices and appliances simultaneously without knowing how much each one contributes to total consumption.
 
-| Evidence type | Source | Date | Key finding |
-|--------------|--------|------|------------|
-| User interviews | [N] interviews with [profile] | [date] | [what they said] |
-| Support data | Support tickets | [period] | [% of tickets on this topic] |
-| Benchmarking | [Competitors / market] | [date] | [how others solve it] |
-| Direct observation | [Shadowing / field research] | [date] | [what was observed] |
+It also occurs when:
 
----
+- Devices are left on unnecessarily.
+- Appliances with high energy consumption are used.
+- Unexpected increases in consumption occur.
+- The user receives an electricity bill from their service provider with a higher-than-expected amount.
+- The user tries to determine why consumption increased from one period to another.
+- The user wants to establish a consumption limit but does not have enough information to determine an appropriate limit.
+- The user needs to compare current consumption with historical consumption.
 
-## 4. Current user solution (and its problems)
+## What Is the Impact?
 
-> How does the user solve the problem today?
+The lack of information and control over electricity consumption can generate different consequences.
 
-| Current solution | Limitations | Cost/Friction |
-|-----------------|------------|--------------|
-| [Excel / manual process] | [Does not scale, errors, slow] | [X hours/day] |
-| [Legacy system] | [No API, no integration] | [Y errors/week] |
+### Economic Impact
 
----
+Inefficient energy consumption can increase the cost of electricity bills. The user may only detect the problem after their service provider has issued the bill, when the consumption has already occurred.
 
-## 5. Solution hypothesis
+### Environmental Impact
 
-> This is the first draft of the solution direction. It is not a commitment.
+Unnecessary energy consumption can also contribute to a greater environmental impact, especially when the energy being used does not provide a real benefit to the user.
 
-**We believe that** [describe the high-level solution]
-**for** [the user segment],
-**will achieve** [the expected benefit].
-**We will know we succeeded when** [specific metric].
+### Impact on Decision-Making
 
----
+Users may have difficulties making informed decisions because they do not have sufficiently detailed information about their energy consumption.
 
-## 6. Success metrics (North Star)
+Consequently, the problem can be summarized as:
 
-| Metric | Current baseline | 6-month target | How to measure it |
-|--------|----------------|---------------|-------------------|
-| [Business metric 1] | [current value] | [target value] | [instrument] |
-| [Adoption metric] | [current value] | [target value] | [instrument] |
+Greater difficulty in controlling electricity expenses, identifying unnecessary consumption, making timely decisions, and developing efficient energy consumption habits.
 
-**North Star Metric:** [The single metric that best captures the value delivered]
+## How Do They Currently Solve the Problem?
 
----
+One current approach involves users checking energy consumption data available within the application. The project scope specifically covers the manual setting of thresholds—or the use of default thresholds—and monitoring based on these established consumption limits.
 
-## 7. Hypothesis risks
+## Why Is It Worth Solving?
 
-| Risk | Probability | Impact | Experiment to validate |
-|------|------------|--------|----------------------|
-| [Users will not adopt the change] | High | High | [Pilot with N users] |
-| [The problem is not as frequent as we think] | Medium | High | [Support log analysis] |
+It is worth solving this problem because having clearer information about electricity consumption can help users understand their consumption patterns, detect unusual situations, and make decisions aimed at using energy more efficiently.
 
----
+The project specifically proposes providing information about consumption, alerts for excessive consumption, and personalized recommendations.
 
-## 8. Out of scope (we do not solve)
+Solving this problem can generate value in different areas:
 
-> Explicitly define which related problems you are NOT solving in this version.
-> This prevents scope creep.
+### For the User:
 
-- [Related problem that is out of scope: why]
-- [Feature users ask for but we are not doing now: reason]
+- Greater knowledge about their energy consumption.
+- Greater ability to identify high consumption.
+- The possibility of establishing consumption limits.
+- Information to support decision-making.
+- The possibility of reducing expenses through more efficient energy use.
 
----
+### For the Household:
 
-## Correlations
+- Better control of energy consumption.
+- Identification of consumption patterns.
+- Historical monitoring.
+- Promotion of energy-saving habits.
 
-- Product vision → `03-product/vision.md`
-- HUs that implement this solution → `04-requirements/user-stories.md`
-- Detailed KPIs → `13-operations/README.md`
+### For the Environment:
+
+- Promotion of responsible energy consumption.
+- Reduction of energy waste.
+- Promotion of sustainable energy habits.
+
+The stated purpose of the project is precisely to promote efficient energy use through consumption visualization, alerts, and personalized recommendations.
+
+## Summary of the Problem
+
+Based on the six points above, the problem can be formulated as follows:
+
+Users in Colombian households have difficulties knowing, understanding, and controlling their electricity consumption because they do not have sufficiently clear and timely information about how, when, and where this consumption occurs. Currently, monitoring may depend mainly on the information available on the electricity bill provided by their service provider, which limits their ability to identify high consumption in a timely manner, determine its possible causes, and take corrective actions. This situation may contribute to inefficient energy use, higher electricity costs, and a negative environmental impact.
+
+## Problem Framing Summary
+
+| Point                               | Project Identification                                                                                                       |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **Who has the problem?**            | Users in Colombian households who consume electricity.                                                                       |
+| **What problem do they have?**      | Difficulty knowing, understanding, and controlling their electricity consumption.                                            |
+| **When does it occur?**             | During daily electricity use, especially when consumption is high or unexpected.                                             |
+| **What is the impact?**             | Higher costs, inefficient consumption, difficulty making decisions, and environmental impact.                                |
+| **How do they currently solve it?** | By manually setting thresholds—or using predefined ones—and monitoring based on these established consumption limits.        |
+| **Why is it worth solving?**        | To improve consumption control, promote responsible habits, facilitate informed decisions, and contribute to energy savings. |

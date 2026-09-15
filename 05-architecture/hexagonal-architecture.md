@@ -5,12 +5,12 @@
 > The database, the web framework, the message broker — all are interchangeable details.
 > What matters is the business logic, which lives at the center.
 
-> **Stack note:** The concepts in this document are valid for any language.
-> The code examples and folder structure specific to your technology are in:
-> - Node.js + TypeScript → [`_stacks/node-typescript.md`](../_stacks/node-typescript.md)
-> - Java + Spring Boot → [`_stacks/java-spring.md`](../_stacks/java-spring.md)
-> - Python + FastAPI → [`_stacks/python-fastapi.md`](../_stacks/python-fastapi.md)
-> - Go → [`_stacks/go.md`](../_stacks/go.md)
+> **Stack note:** all six microservices in this project (`security-service`, `home-service`,
+> `device-service`, `measurement-service`, `alert-service`, `recommendation-service`) are built on
+> **Java 21 + Spring Boot** (`01-context/overview.md`). There is no second stack to support, so
+> this document gives the Java/Spring examples directly instead of deferring to a separate
+> `_stacks/java-spring.md` file — there would be nothing left in this document if the stack-specific
+> part were split out.
 
 ---
 
@@ -35,235 +35,445 @@ you need to simulate the database.
 ```
 ✓ Hexagonal Architecture:
 
-  [HTTP Controller]  [CLI]  [Test]  ← Primary Adapters (enter the hexagon)
-          │            │      │
-          └────────────┴──────┘
+  [HTTP Controller]  [MQTT Consumer]  [Test]  ← Primary Adapters (enter the hexagon)
+          │                 │           │
+          └─────────────────┴───────────┘
                        │
-                 [Driving Port]  ← Interface that defines the domain's API
+             [Use Case class]  ← the driving port, called directly (see note below)
                        │
                ┌───────────────┐
                │               │
-               │    DOMAIN     │  ← Pure business logic, no external dependencies
+               │    DOMAIN     │  ← Pure business logic, no Spring, no JPA
                │               │
                └───────────────┘
                        │
                  [Driven Port]  ← Interface the domain needs from the outside world
                        │
-          ┌────────────┴──────┐
-          │                   │
-  [DB Adapter]  [Kafka Adapter]  ← Secondary Adapters (exit the hexagon)
+          ┌────────────┴───────────────┐
+          │                            │
+  [Persistence Adapter]     [Security Adapter (JWT, hashing)]  ← Secondary Adapters (exit the hexagon)
 ```
 
 ---
 
-## Folder structure
+## Folder structure — generic, for any service
+
+This is the shape every service in this project follows. Replace `Xxx` with the aggregate or
+concept the service owns — this same layout applies to `security-service`, `home-service`,
+`device-service`, `measurement-service`, `alert-service`, and `recommendation-service` alike.
 
 ```
-src/
-├── domain/                          # The hexagon — no frameworks, no external dependencies
-│   ├── [aggregate]/
-│   │   ├── [Aggregate].ts           # Aggregate Root with invariants
-│   │   ├── [Aggregate]Id.ts         # Value Object for the ID
-│   │   ├── events/
-│   │   │   └── [EventOccurred].ts   # Domain events
-│   │   ├── services/
-│   │   │   └── [DomainService].ts   # Logic that does not belong to any entity
-│   │   └── ports/                   # Interfaces (ports) — abstract contracts
-│   │       ├── in/
-│   │       │   └── [UseCasePort].ts # Driving port: use case contract
-│   │       └── out/
-│   │           └── [RepoPort].ts    # Driven port: repository contract
-│   └── shared/
-│       └── value-objects/           # VOs shared between aggregates
-│           ├── Email.ts
-│           └── Money.ts
+[service-name]-service
 │
-├── application/                     # Use cases — orchestrate the domain
-│   └── [aggregate]/
-│       ├── [CreateXxxUseCase].ts    # Implements the driving port
-│       └── dtos/
-│           ├── [CreateXxxRequest].ts
-│           └── [CreateXxxResponse].ts
+├── adapter/
+│   ├── in/
+│   │   └── web/
+│   │       └── XxxController.java           # Translates HTTP requests into use case calls
+│   │
+│   └── out/
+│       ├── client/
+│       │   └── XxxClient.java                # Calls another service or an external system
+│       │
+│       ├── persistence/
+│       │   ├── entity/
+│       │   │   └── XxxEntity.java            # JPA mapping — never used inside domain/
+│       │   ├── mapper/
+│       │   │   └── XxxMapper.java            # Translates Entity ↔ Domain Model
+│       │   ├── repository/
+│       │   │   └── XxxJpaRepository.java     # Spring Data interface
+│       │   └── XxxRepositoryAdapter.java     # Implements the domain's outbound port
+│       │
+│       └── security/                          # Only where the service issues or reads tokens
+│           └── XxxTokenProvider.java
 │
-├── infrastructure/                  # Everything external to the hexagon
-│   ├── adapters/
-│   │   ├── in/                      # Primary adapters — receive external calls
-│   │   │   ├── http/
-│   │   │   │   ├── [XxxController].ts
-│   │   │   │   └── [XxxRouter].ts
-│   │   │   └── messaging/
-│   │   │       └── [XxxEventConsumer].ts
-│   │   └── out/                     # Secondary adapters — call the outside
-│   │       ├── persistence/
-│   │       │   └── [XxxRepositoryImpl].ts   # Implements the driven port
-│   │       ├── messaging/
-│   │       │   └── [XxxEventPublisher].ts
-│   │       └── external/
-│   │           └── [ExternalApiAdapter].ts
-│   └── config/
-│       ├── database.ts
-│       └── container.ts             # Dependency injection (IoC)
+├── application/
+│   ├── port/
+│   │   ├── in/                                # Empty by convention — see note below
+│   │   └── out/
+│   │       └── XxxRepository.java             # Outbound port — an interface, no implementation
+│   │
+│   └── usecase/
+│       └── DoSomethingWithXxxUseCase.java     # Coordinates the domain; called directly by adapters
 │
-└── main.ts                          # Bootstrap — connects adapters with ports
+├── domain/
+│   ├── exception/
+│   │   └── XxxNotFoundException.java
+│   ├── model/
+│   │   └── Xxx.java                           # Framework-free — no Spring, no JPA
+│   └── valueobject/
+│       └── XxxStatus.java
+│
+├── infrastructure/
+│   ├── config/
+│   │   └── SecurityConfig.java
+│   ├── exception/
+│   └── observability/
+│
+└── XxxServiceApplication.java                 # Spring Boot bootstrap
 ```
+
+---
+
+## Concrete example — `security-service`
+
+The structure already built for Security, following the same layout as the reference above:
+
+```
+src/main/java/.../security/
+├── adapter/
+│   ├── in/
+│   │   └── web/                          # Primary adapters — one Controller per aggregate/concern
+│   │       ├── AuditController.java
+│   │       ├── AuthController.java
+│   │       ├── PasswordController.java
+│   │       ├── PermissionController.java
+│   │       ├── RoleController.java
+│   │       ├── SecurityConfigurationController.java
+│   │       ├── SessionController.java
+│   │       └── UserController.java
+│   └── out/                              # Secondary adapters — implement application/port/out
+│       ├── client/
+│       │   └── EmailSenderClient.java     # implements EmailSender
+│       ├── persistence/
+│       │   ├── entity/                   # @Entity classes — persistence entities, never the domain model
+│       │   ├── mapper/                   # Entity ↔ domain model translation
+│       │   ├── repository/               # Spring Data JpaRepository interfaces (framework-facing)
+│       │   └── *RepositoryAdapter.java    # implements application/port/out/*Repository
+│       └── security/
+│           ├── JwtTokenProvider.java      # implements TokenProvider
+│           └── PasswordHasherImpl.java    # implements PasswordHasher
+├── application/
+│   ├── port/
+│   │   ├── in/                            # (empty — see "Driving Port" note below)
+│   │   └── out/                           # Driven ports — what the domain needs from outside
+│   │       ├── AuditRepository.java
+│   │       ├── EmailSender.java
+│   │       ├── LoginErrorLogRepository.java
+│   │       ├── PasswordHasher.java
+│   │       ├── PasswordPolicyRepository.java
+│   │       ├── PasswordResetTokenRepository.java
+│   │       ├── PermissionRepository.java
+│   │       ├── RoleRepository.java
+│   │       ├── SecurityConfigurationRepository.java
+│   │       ├── SessionRepository.java
+│   │       ├── TokenProvider.java
+│   │       └── UserRepository.java
+│   └── usecase/                           # One class per business operation — see table below
+│       ├── AuthenticateUserUseCase.java
+│       ├── CreateUserUseCase.java
+│       ├── ...
+├── domain/
+│   ├── exception/                         # Domain exceptions — no HTTP status here, see Controllers
+│   │   ├── AccountBlockedException.java
+│   │   ├── AccountInactiveException.java
+│   │   ├── InvalidCredentialsException.java
+│   │   ├── TokenAlreadyUsedException.java
+│   │   ├── TokenExpiredException.java
+│   │   └── UserNotFoundException.java
+│   ├── model/                             # Aggregates and Entities — framework-free
+│   │   ├── User.java
+│   │   ├── Session.java
+│   │   ├── Role.java
+│   │   ├── Permission.java
+│   │   └── ...
+│   └── valueobject/
+│       ├── AuditAction.java
+│       ├── LoginErrorType.java
+│       └── UserStatus.java
+├── infrastructure/
+│   ├── config/                            # Spring wiring only — never business rules
+│   │   ├── AuthorizationServerConfig.java
+│   │   ├── OpenApiConfig.java
+│   │   └── SecurityConfig.java
+│   ├── exception/                         # @ControllerAdvice — maps domain exceptions → HTTP
+│   └── observability/
+└── SecurityServiceApplication.java        # Spring Boot bootstrap
+```
+
+`home-service`, `device-service`, `measurement-service`, `alert-service`, and
+`recommendation-service` mirror this exact package layout, with their own aggregates, use cases,
+and ports in place of Security's.
 
 ---
 
 ## The Ports
 
-Ports are **interfaces** (abstract contracts). The domain defines them;
+Ports are **interfaces** (abstract contracts). The domain and application layers define them;
 adapters implement them.
 
-### Driving Port (Input Port)
+### Driving Port (Input Port) — a deliberate simplification in this project
 
-Defines what the domain can do — its public API from the outside's perspective.
+The textbook version of this pattern puts a separate interface in `application/port/in/` (e.g.
+`DoSomethingWithXxxPort`) that the use case class implements, so a controller depends on the
+interface rather than the concrete class. **This project does not do that** — as the folder
+structure above shows, `application/port/in/` is empty in every service. Controllers inject the
+concrete use case class directly:
 
-```typescript
-// src/domain/order/ports/in/CreateOrderPort.ts
-export interface CreateOrderPort {
-  execute(request: CreateOrderRequest): Promise<CreateOrderResponse>;
+```java
+// application/usecase/DoSomethingWithXxxUseCase.java — this class itself IS the driving port
+@Service
+public class DoSomethingWithXxxUseCase {
+    public XxxResult execute(XxxCommand command) { ... }
 }
 ```
+
+This is a conscious trade-off, not an oversight: with one implementation per use case and no
+plan to swap it, the extra interface adds a layer of indirection without a corresponding benefit.
+The cost is that a controller technically depends on a concrete class instead of an abstraction —
+acceptable here because no service in this project ever substitutes a different implementation of
+a use case at runtime. If that ever changes for a specific use case, that specific one gets its
+own `port/in` interface; the rest do not need to change to stay consistent.
+
+**Example (`security-service`):** `AuthenticateUserUseCase` is itself the driving port that
+`AuthController` depends on directly — no `AuthenticateUserPort` interface exists anywhere in the
+codebase.
 
 ### Driven Port (Output Port)
 
-Defines what the domain needs from the outside world — without knowing how it is implemented.
+Defines what the domain needs from the outside world — without knowing how it is implemented. The
+use case is written entirely against these interfaces, never against a concrete JPA repository,
+a hashing library, or any other technology.
 
-```typescript
-// src/domain/order/ports/out/OrderRepositoryPort.ts
-export interface OrderRepositoryPort {
-  save(order: Order): Promise<void>;
-  findById(id: OrderId): Promise<Order | null>;
-  findByCustomer(customerId: CustomerId): Promise<Order[]>;
-}
-
-// src/domain/order/ports/out/EventPublisherPort.ts
-export interface EventPublisherPort {
-  publish(event: DomainEvent): Promise<void>;
+```java
+// application/port/out/XxxRepository.java
+public interface XxxRepository {
+    Xxx save(Xxx xxx);
+    Optional<Xxx> findById(XxxId id);
 }
 ```
+
+One port per capability the domain needs — never one giant port that bundles unrelated
+capabilities together.
+
+**Example (`security-service`):** `UserRepository`, `PasswordHasher`, and `TokenProvider` are
+three separate ports, not one combined `SecurityGateway` interface:
+
+```java
+// application/port/out/UserRepository.java
+public interface UserRepository {
+    User save(User user);
+    Optional<User> findByEmail(Email email);
+}
+
+// application/port/out/PasswordHasher.java
+public interface PasswordHasher {
+    String hash(String rawPassword);
+    boolean matches(String rawPassword, String hash);
+}
+
+// application/port/out/TokenProvider.java
+public interface TokenProvider {
+    String issueAccessToken(UserId userId, Set<String> permissionCodes);
+}
+```
+
+The full outbound-port inventory for Security also includes `AuditRepository`, `EmailSender`,
+`LoginErrorLogRepository`, `PasswordPolicyRepository`, `PasswordResetTokenRepository`,
+`PermissionRepository`, `RoleRepository`, `SecurityConfigurationRepository`, and
+`SessionRepository` — the same one-port-per-capability rule applied twelve times.
 
 ---
 
 ## The Adapters
 
-### Primary Adapter — HTTP Controller
+### Primary Adapter — how the Controller translates an HTTP request into a domain use case
 
-The HTTP controller translates the HTTP request to the domain use case.
+The controller's only job is translation: HTTP request → domain command, and domain result → HTTP
+response. It contains no business rule — if you find an `if` statement enforcing a business rule
+inside a controller, that rule belongs in the domain model or the use case, not here.
 
-```typescript
-// src/infrastructure/adapters/in/http/OrderController.ts
-import { CreateOrderPort } from '@domain/order/ports/in/CreateOrderPort';
+```java
+// adapter/in/web/XxxController.java
+@RestController
+@RequestMapping("/xxx")
+public class XxxController {
 
-@Controller('/orders')
-export class OrderController {
-  constructor(
-    // Inject the port, NOT the concrete implementation
-    private readonly createOrder: CreateOrderPort,
-  ) {}
+    private final DoSomethingWithXxxUseCase useCase;
 
-  @Post('/')
-  async create(@Body() body: CreateOrderHttpRequest): Promise<void> {
-    // Translate HTTP request → domain DTO
-    const request = new CreateOrderRequest(body.customerId, body.items);
-    // Call the use case through the port
-    const response = await this.createOrder.execute(request);
-    return response;
-  }
+    public XxxController(DoSomethingWithXxxUseCase useCase) {
+        this.useCase = useCase;
+    }
+
+    @PostMapping
+    public ResponseEntity<XxxResponseDto> handle(@RequestBody @Valid XxxRequestDto request) {
+        // 1. Translate the HTTP DTO into a domain command — no business meaning yet, just shape
+        XxxCommand command = XxxCommand.from(request);
+
+        // 2. Call the use case — this line is the entire boundary crossing
+        XxxResult result = useCase.execute(command);
+
+        // 3. Translate the domain result back into an HTTP DTO
+        return ResponseEntity.ok(XxxResponseDto.from(result));
+    }
 }
 ```
 
-### Secondary Adapter — Repository
+Domain exceptions propagate up from the use case uncaught by the controller itself — mapping them
+to an HTTP status happens once, centrally, in `infrastructure/exception/` (a
+`@ControllerAdvice`), not with a `try/catch` block repeated in every controller method. This is
+the concrete answer to the open question `05-architecture/cross-cutting.md` raises under "Error
+handling": the mapping table that document says does not exist yet is exactly what belongs in
+that `@ControllerAdvice` class.
 
-The repository implements the driven port. The domain does not know PostgreSQL exists.
+**Example (`security-service`):** `AuthController.login()` follows this exact shape — it builds
+an `AuthenticateUserCommand`, calls `AuthenticateUserUseCase.execute(...)`, and returns an
+`AuthResponseDto`. It never checks `failedLoginAttempts` or any other rule itself; if
+`InvalidCredentialsException` or `AccountBlockedException` is thrown, the controller lets it
+propagate to the shared `@ControllerAdvice`.
 
-```typescript
-// src/infrastructure/adapters/out/persistence/OrderRepositoryImpl.ts
-import { OrderRepositoryPort } from '@domain/order/ports/out/OrderRepositoryPort';
+### Secondary Adapter — implementing the output Repository
 
-export class OrderRepositoryImpl implements OrderRepositoryPort {
-  constructor(private readonly db: DatabaseConnection) {}
+The repository adapter implements the driven port. The domain does not know MySQL, JPA, or
+Hibernate exist — it only knows the port interface.
 
-  async save(order: Order): Promise<void> {
-    // Translate Aggregate → database row
-    await this.db.query(
-      'INSERT INTO orders (id, customer_id, status, total) VALUES ($1, $2, $3, $4)',
-      [order.id.value, order.customerId.value, order.status, order.total.amount],
-    );
-  }
+```java
+// adapter/out/persistence/entity/XxxEntity.java — persistence entity, maps the table 1:1
+@Entity
+@Table(name = "xxx")
+public class XxxEntity {
+    @Id
+    private String id;
+    // fields matching the table columns — no business logic lives here
+}
 
-  async findById(id: OrderId): Promise<Order | null> {
-    const row = await this.db.queryOne('SELECT * FROM orders WHERE id = $1', [id.value]);
-    if (!row) return null;
-    // Translate database row → Aggregate
-    return OrderMapper.toDomain(row);
-  }
+// adapter/out/persistence/repository/XxxJpaRepository.java — Spring Data, framework-facing only
+public interface XxxJpaRepository extends JpaRepository<XxxEntity, String> { }
+
+// adapter/out/persistence/mapper/XxxMapper.java — translates in both directions
+@Component
+public class XxxMapper {
+    public Xxx toDomain(XxxEntity entity) { /* Entity → domain model */ }
+    public XxxEntity toEntity(Xxx domain) { /* domain model → Entity */ }
+}
+
+// adapter/out/persistence/XxxRepositoryAdapter.java — implements the driven port
+@Component
+public class XxxRepositoryAdapter implements XxxRepository {
+
+    private final XxxJpaRepository jpaRepository;
+    private final XxxMapper mapper;
+
+    public XxxRepositoryAdapter(XxxJpaRepository jpaRepository, XxxMapper mapper) {
+        this.jpaRepository = jpaRepository;
+        this.mapper = mapper;
+    }
+
+    @Override
+    public Xxx save(Xxx xxx) {
+        return mapper.toDomain(jpaRepository.save(mapper.toEntity(xxx)));
+    }
 }
 ```
+
+One `*Entity`, one `*JpaRepository`, one `*Mapper`, one `*RepositoryAdapter` per aggregate — the
+pattern does not change per aggregate, only the fields do.
+
+**Example (`security-service`):** `UserRepositoryAdapter` implements `UserRepository` exactly this
+way, backed by `UserEntity`, `UserJpaRepository`, and `UserMapper`. The other eleven repository
+ports in Security (`SessionRepository`, `PermissionRepository`, ...) each get their own
+`*Entity`/`*JpaRepository`/`*Mapper`/`*RepositoryAdapter` set following the identical pattern.
+
+### A category the generic template does not have: `adapter/out/security/`
+
+Not every driven port is a repository. A port that hashes a password or issues a token is still a
+secondary adapter — it just is not persistence:
+
+```java
+// adapter/out/security/XxxTokenProvider.java
+@Component
+public class XxxTokenProvider implements TokenProvider {
+    // Wraps whatever library actually issues the token. The domain calls
+    // TokenProvider.issueAccessToken(...) and never sees that library's types —
+    // swapping the library is a change confined entirely to this one class.
+}
+```
+
+**Example (`security-service`):** `JwtTokenProvider` implements `TokenProvider` by wrapping a JWT
+library, and `PasswordHasherImpl` implements `PasswordHasher` by wrapping Spring Security's
+`BCryptPasswordEncoder`. This is exactly what the `PasswordHasher` port protects against, per
+`06-data/data-dictionary.md`'s note on `user.password_hash`: the concrete hashing algorithm is
+swappable without ever touching a use case.
 
 ---
 
 ## The Use Case (Application Service)
 
-The use case orchestrates the domain. It uses driving and driven ports. It contains no business logic — that lives in the Aggregate.
+The use case orchestrates the domain. It calls driven ports. It contains no business rule that
+belongs to an Aggregate — those rules live in the domain model, not copy-pasted into the use case.
 
-```typescript
-// src/application/order/CreateOrderUseCase.ts
-import { CreateOrderPort } from '@domain/order/ports/in/CreateOrderPort';
-import { OrderRepositoryPort } from '@domain/order/ports/out/OrderRepositoryPort';
-import { EventPublisherPort } from '@domain/order/ports/out/EventPublisherPort';
+```java
+// application/usecase/DoSomethingWithXxxUseCase.java
+@Service
+public class DoSomethingWithXxxUseCase {
 
-export class CreateOrderUseCase implements CreateOrderPort {
-  constructor(
-    private readonly orderRepo: OrderRepositoryPort,
-    private readonly eventPublisher: EventPublisherPort,
-  ) {}
+    private final XxxRepository xxxRepository;
+    // ...one field per port this operation actually needs
 
-  async execute(request: CreateOrderRequest): Promise<CreateOrderResponse> {
-    // 1. Create the aggregate (business logic lives HERE, in the domain)
-    const order = Order.create(request.customerId, request.items);
-
-    // 2. Persist (through the port — the use case does not know which DB is used)
-    await this.orderRepo.save(order);
-
-    // 3. Publish domain events (through the port)
-    for (const event of order.domainEvents) {
-      await this.eventPublisher.publish(event);
+    public DoSomethingWithXxxUseCase(XxxRepository xxxRepository) {
+        this.xxxRepository = xxxRepository;
     }
 
-    return new CreateOrderResponse(order.id.value);
-  }
+    public XxxResult execute(XxxCommand command) {
+        // 1. Load the aggregate (through the port — this class does not know which database it is)
+        Xxx xxx = xxxRepository.findById(command.id()).orElseThrow(XxxNotFoundException::new);
+
+        // 2. Business logic lives in the Aggregate, not here
+        xxx.doSomething(command);
+
+        // 3. Persist the updated aggregate state
+        xxxRepository.save(xxx);
+
+        return XxxResult.from(xxx);
+    }
 }
 ```
+
+**Example (`security-service`):** `AuthenticateUserUseCase` follows this shape, coordinating
+`UserRepository`, `PasswordHasher`, `TokenProvider`, `SessionRepository`, and
+`RegisterLoginErrorUseCase` to authenticate a user — but the business rule that a `BLOCKED`
+account cannot authenticate again (`INV-005`) lives on `User` itself, not inside this use case.
+The use case only calls `user.registerFailedAttempt()` and reacts to what the aggregate decides.
 
 ---
 
 ## The Dependency Rule
 
 > **Dependencies always point inward.**
-> The domain does not import anything from application or infrastructure.
-> Infrastructure imports from the domain (but never the other way around).
+> `domain/` does not import anything from `application/` or `infrastructure/`.
+> `infrastructure/` imports from `domain/` and `application/` (never the other way around).
 
 ```
-infrastructure/ → application/ → domain/
-                                    ↑
-                         CANNOT import anything from application/ or infrastructure/
+adapter/ (infrastructure) → application/ → domain/
+                                              ↑
+                                CANNOT import anything from application/ or adapter/
 ```
+
+Concretely: `domain/model/Xxx.java` never imports `jakarta.persistence.*`,
+`org.springframework.*`, or anything from `adapter/`, in any of the six services. If a domain
+class needs an `@Entity` annotation to compile, that class is not in `domain/` — it belongs in
+`adapter/out/persistence/entity/`. **Example (`security-service`):** `domain/model/User.java`
+imports nothing from Spring or JPA — the `@Entity` annotation lives on `UserEntity` instead, in
+`adapter/out/persistence/entity/`.
 
 ### Dependency inversion (DI) in practice
 
-```typescript
-// ✓ Correct — domain defines the interface, infrastructure implements it
-// In domain/:
-export interface OrderRepositoryPort { ... }
+```java
+// ✓ Correct — the port lives in application/, the adapter implements it
+// In application/port/out/:
+public interface XxxRepository { ... }
 
-// In infrastructure/:
-export class OrderRepositoryImpl implements OrderRepositoryPort { ... }
+// In adapter/out/persistence/:
+@Component
+public class XxxRepositoryAdapter implements XxxRepository { ... }
 
-// In the bootstrap (main.ts), the concrete implementation is injected:
-const orderRepo = new OrderRepositoryImpl(dbConnection);
-const createOrderUseCase = new CreateOrderUseCase(orderRepo, eventPublisher);
-const orderController = new OrderController(createOrderUseCase);
+// Spring's IoC container wires them together automatically by type at startup —
+// there is no manual composition root to maintain, but the direction of the dependency
+// is identical either way: the use case asks for the port (the interface), Spring hands
+// it the adapter (the implementation) at runtime.
+@Service
+public class DoSomethingWithXxxUseCase {
+    public DoSomethingWithXxxUseCase(XxxRepository xxxRepository, /* ... */) { ... }
+}
 ```
 
 ---
@@ -272,84 +482,88 @@ const orderController = new OrderController(createOrderUseCase);
 
 Hexagonal architecture is ideal for TDD because:
 
-1. **The domain is testable without framework mocks.** You do not need to start a server
-   or a database to test business logic.
+1. **The domain is testable without framework mocks.** No Spring context, no database, no MQTT
+   broker needs to start to test a domain model's business logic.
 
-2. **Driven ports can be faked easily.** In tests, you use an
-   in-memory repository (Fake) instead of the real one.
+2. **Driven ports can be faked easily.** In tests, an in-memory port implementation replaces the
+   real adapter — no `@DataJpaTest`, no test database.
 
 3. **Invariants are explicit** and tested in isolation.
 
-```typescript
-// Domain unit test — zero external dependencies
-describe('Order', () => {
-  it('cannot be created without items', () => {
-    expect(() => Order.create(customerId, [])).toThrow('INV-001');
-  });
+```java
+// Domain unit test — zero external dependencies, zero Spring annotations
+class XxxTest {
 
-  it('on confirm changes status to CONFIRMED', () => {
-    const order = Order.create(customerId, [validItem]);
-    order.confirm();
-    expect(order.status).toBe(OrderStatus.CONFIRMED);
-  });
+    @Test
+    void enforcesItsOwnInvariant() {
+        Xxx xxx = Xxx.create(/* ... */);
+        assertThrows(SomeDomainException.class, () -> xxx.doSomethingInvalid());
+    }
+}
 
-  it('on confirm emits OrderConfirmed event', () => {
-    const order = Order.create(customerId, [validItem]);
-    order.confirm();
-    expect(order.domainEvents).toContainEqual(expect.any(OrderConfirmedEvent));
-  });
-});
+// Use case test with a FAKE port (not a real DB, not @DataJpaTest)
+class DoSomethingWithXxxUseCaseTest {
 
-// Use case test with FAKE repository (not a real DB mock)
-describe('CreateOrderUseCase', () => {
-  it('saves the order and publishes the event', async () => {
-    const fakeOrderRepo = new InMemoryOrderRepository();
-    const fakeEventPublisher = new InMemoryEventPublisher();
-    const useCase = new CreateOrderUseCase(fakeOrderRepo, fakeEventPublisher);
+    @Test
+    void savesTheUpdatedAggregate() {
+        InMemoryXxxRepository fakeRepo = new InMemoryXxxRepository();
+        fakeRepo.save(existingXxx);
+        DoSomethingWithXxxUseCase useCase = new DoSomethingWithXxxUseCase(fakeRepo);
 
-    await useCase.execute(new CreateOrderRequest(customerId, [validItem]));
+        useCase.execute(new XxxCommand(/* ... */));
 
-    expect(fakeOrderRepo.orders).toHaveLength(1);
-    expect(fakeEventPublisher.events).toContainEqual(expect.any(OrderCreated));
-  });
-});
+        assertEquals(expectedState, fakeRepo.findById(id).get().state());
+    }
+}
 ```
 
-> See full TDD guide in `11-quality/tdd-guide.md`
+**Example (`security-service`):** `UserTest.blockedAccountCannotAuthenticateAgain()` registers
+enough failed attempts to trigger `INV-005` and asserts `User` transitions to `BLOCKED` — with no
+Spring context and no database. `AuthenticateUserUseCaseTest` then verifies the use case behaves
+correctly against an `InMemoryUserRepository` and a stubbed `PasswordHasher`, never a real one.
+
+> See the full TDD guide in `11-quality/tdd-guide.md`.
 
 ---
 
 ## Hexagonal Architecture Checklist
 
-When reviewing a PR or new service, verify:
+When reviewing a PR or a new service, verify:
 
-- [ ] `domain/` has no imports from `infrastructure/` or `application/`
-- [ ] `domain/` has no imports from frameworks (Express, NestJS, TypeORM, etc.)
-- [ ] Every repository interface lives in `domain/ports/out/`
-- [ ] Every use case interface lives in `domain/ports/in/`
-- [ ] Mappers (`toDomain` / `toPersistence`) live in `infrastructure/`, not in `domain/`
-- [ ] HTTP API DTOs live in `infrastructure/adapters/in/http/`, not in `domain/`
-- [ ] There is a unit test for each Aggregate invariant
+- [ ] `domain/` has no imports from `application/` or `adapter/`
+- [ ] `domain/` has no imports from frameworks (`org.springframework.*`, `jakarta.persistence.*`)
+- [ ] Every repository/external-capability interface lives in `application/port/out/`
+- [ ] `application/port/in/` stays empty **on purpose** — use case classes are the driving port
+      directly (see the note above). A PR that adds a new `port/in` interface for one specific
+      use case is fine if justified; a PR that adds one "for consistency" with no runtime reason
+      to substitute the implementation is the anti-pattern to push back on
+- [ ] Mappers (`toDomain` / `toEntity`) live in `adapter/out/persistence/mapper/`, never in `domain/`
+- [ ] HTTP request/response DTOs live in `adapter/in/web/`, never in `domain/` or `application/`
+- [ ] `@Entity` classes live in `adapter/out/persistence/entity/`, never used as the domain model
+- [ ] There is a unit test for each Aggregate invariant (`INV-XXX` in `02-domain/entities-and-rules.md`)
 
 ---
 
 ## Common mistakes (anti-patterns)
 
-| Anti-pattern | Why it is bad | Solution |
-|-------------|--------------|---------|
-| `import { Repository } from 'typeorm'` in the domain | Couples the domain to TypeORM | Define your own port interface |
-| Business logic in the Controller | If you change the endpoint, you change the business | Move to the Aggregate |
-| Repository returning DTOs instead of Aggregates | The domain cannot validate invariants | Use Mapper to reconstruct the Aggregate |
-| Use case with 15 dependencies | It probably does too much | Split into smaller use cases |
-| `any` in port interfaces | You lose the typed contract | Always use explicit typing |
+| Anti-pattern                                                                                                      | Why it is bad                                                                                                                                          | Solution                                                                                   |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------ |
+| `import jakarta.persistence.Entity` on a class in `domain/model/`                                                 | Couples the domain to JPA — the domain now cannot exist without a JPA provider on the classpath                                                        | Keep `@Entity` classes in `adapter/out/persistence/entity/`; map with a dedicated Mapper   |
+| Business logic in the Controller (e.g. checking a business rule before calling the use case)                     | If the endpoint changes, the business rule silently changes with it, and no other entry point (a future MQTT consumer, a batch job) gets the same rule | Move the rule into the Aggregate as a method, called from the use case                     |
+| A `*RepositoryAdapter` returning `XxxEntity` instead of `Xxx` from a method typed as `XxxRepository` | Breaks the contract — the domain would receive a JPA-managed object it cannot validate its own invariants against | The Mapper always converts before returning from the adapter |
+| A use case with 8+ port dependencies in its constructor                                                           | It is probably doing more than one business operation                                                                                                  | Split into smaller use cases, one operation each                                           |
+| Catching a domain exception inside every Controller method                                                        | Duplicates the same mapping logic six, eight, sixteen times across the service                                                                         | One `@ControllerAdvice` in `infrastructure/exception/` maps every domain exception once    |
+| A new `port/in` interface added "just in case" for a use case with one implementation and no plan to add a second | Adds indirection with no benefit — the opposite of what this project already decided for `port/in`                                                     | Keep the use case class as the driving port unless a concrete need to substitute it exists |
 
 ---
 
 ## References and correlations
 
 - Bounded Contexts → `02-domain/domain-map.md`
-- Entities and invariants → `02-domain/entities-and-rules.md`
-- Domain events → `02-domain/domain-events.md`
-- Complementary patterns (CQRS, Event Sourcing, Saga) → `05-architecture/pattern-guide.md`
-- TDD applied to hexagonal architecture → `11-quality/tdd-guide.md`
-- Service template with hexagonal structure → `09-microservices/_template/service/`
+- Entities, invariants, and Value Objects (`INV-004`, `INV-005`, `Threshold`, `ApiKey`, ...) → `02-domain/entities-and-rules.md`
+- Domain events published/consumed by use cases → `02-domain/domain-events.md`
+- Complementary patterns already cataloged for this project (Repository, Use Case, Observer, Factory Method, Singleton, Idempotent Consumer, DLQ, plus Saga/Outbox as not-yet-adopted) → `05-architecture/pattern-guide.md`
+- Error-handling gap this document's `@ControllerAdvice` example resolves → `05-architecture/cross-cutting.md`
+- Term definitions (Port, Adapter, Use Case, Persistence Entity, Mapper, DTO) → `01-context/glossary.md`
+- Per-service documentation once each of the six services is filled in → `09-microservices/services/` (currently only the generic `_template/service/` scaffold exists)
+- TDD applied to this same hexagonal structure → `11-quality/tdd-guide.md`
