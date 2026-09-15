@@ -27,16 +27,27 @@ password, and accept the terms and license
 
 ## Acceptance criteria
 
-> Format: "Given [context/initial state], when [user action], then [expected and verifiable result]"
+> Format: Gherkin (`Scenario` / `Given` / `When` / `Then`), matching what `user-stories.md`
+> actually uses for every HU — this template previously showed a checklist format instead, which
+> did not match the real HU1 and would have propagated the mismatch to every new HU copied from
+> here.
 
-- [ ] **AC1:** Given a person who is not yet registered, when they submit the registration form
-      with name, email, and password and accept the terms/license, then a new account is created.
-- [ ] **AC2:** [Error scenario] Given an email that already belongs to an existing account, when
-      someone tries to register with that same email, then registration is rejected.
-- [ ] **AC3:** Given a logged-in user, when they request a password reset via secure email, then
-      they can set a new password and regain access.
-- [ ] **AC4:** Given a logged-in user, when they request account deletion, then their account is
-      removed and they can no longer log in.
+```gherkin
+Scenario 1: Manual registration
+  Given a person who is not yet registered, with a name, email, and password
+  When they submit the registration form and accept the terms, conditions, and license permissions
+  Then a new account is created
+
+Scenario 2: Email already registered
+  Given an email that already belongs to an existing account
+  When someone tries to register with that same email
+  Then registration is rejected
+
+Scenario 3: Account self-service
+  Given a logged-in user
+  When they update their profile data, request a password reset via secure email, or request account deletion
+  Then the requested change is applied
+```
 
 ---
 

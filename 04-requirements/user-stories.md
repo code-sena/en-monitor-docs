@@ -63,6 +63,11 @@ Scenario 3: Account self-service
 
 ### HU2 — Project and Home Management {#HU2}
 
+> **Terminology note:** "Project" here follows the SRS's own wording, transcribed as-is. The
+> implemented entity is called **"Home"** everywhere in `02-domain/`, `06-data/`, and
+> `05-architecture/` — see the same note in `04-requirements/functional.md` (RF2). Treat "project"
+> and "home" in this HU as the same thing, not two entities.
+
 **Covers:** RF2 (Project Management) — ERF2.1, ERF2.2, ERF2.3, ERF2.4, ERF2.5
 
 > **As** a responsible user

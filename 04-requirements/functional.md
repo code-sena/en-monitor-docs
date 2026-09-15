@@ -22,6 +22,15 @@
 
 ## RF2 — Project Management
 
+> **Terminology note:** the SRS calls this entity "Project," and this table preserves that
+> wording exactly since it is a direct transcription (see the file-level note above). Every other
+> section of this repository — `02-domain/domain-map.md`, `06-data/models.md`,
+> `05-architecture/` — calls the same entity **"Home"** (`Home Management` bounded context,
+> `home` table, `HomeOwner`/`HomeMember` roles). "Project" below and "Home" everywhere else refer
+> to the same thing; the SRS predates the Project→Home rename made in the technical model, and
+> that correction was never carried back into `SRS.docx` or the Historia de Usuario document.
+> This is tracked as a gap in `04-requirements/traceability-matrix.md`.
+
 | ID     | Module             | Description                                                                                                                                                               | Source (HU) | Priority |
 | ------ | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- | -------- | --- | --- | ---- |
 | ERF2.1 | Project Management | The system must let the Home Owner register a project (e.g. a house, a building, a company)                                                                               | HU2         | High     |
