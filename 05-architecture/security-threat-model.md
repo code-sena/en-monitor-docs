@@ -101,16 +101,38 @@ _Can an actor do something they are not authorized to do?_
 
 ---
 
+## Regulatory requirement: Habeas Data (Law 1581 of 2012)
+
+STRIDE is a threat taxonomy; it does not have a category for "does this system comply with a
+specific data-protection law." `04-requirements/non-functional.md` (ERNF3.1) commits this project
+to Colombia's Law 1581 of 2012 anyway, so it is checked here as its own short pass, mapped back to
+the STRIDE threats above where they overlap rather than treated as unrelated.
+
+| #   | Requirement (Art. 4 principle)                                                                             | Status                                                                                                                                                                                                                                                                                                            |
+| --- | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H1  | Libertad — prior, express, informed consent before collecting personal data                                | **Not mitigated.** `HU1` requires accepting "terms, conditions, and license permissions" at registration, but no field on `user` (`06-data/models.md`) records that consent was given — there is no evidence trail for something the product's own acceptance criteria require                                    |
+| H2  | Seguridad — technical measures preventing unauthorized access to personal data                             | Same underlying gap as **T3/T4** (no TLS decision) and **I4** (no documented home-isolation enforcement) above — not a new gap, a new legal reason the existing ones are now overdue                                                                                                                              |
+| H3  | Transparencia — the data subject can obtain what data is held about them, on request                       | **Not mitigated.** No consolidated "my data" capability exists; overlaps with **I3** (DTOs prevent _accidental_ over-exposure) but does not satisfy it — I3 is about not leaking too much, H3 is about being able to deliberately show everything on request, which is a different, unbuilt capability            |
+| H4  | Confidencialidad — everyone who handles the data keeps it reserved, including after their involvement ends | **Not documented.** No confidentiality expectation is written down for the two people with direct database access (`01-context/scope.md`) — closer to a **Repudiation**-adjacent gap than an Information Disclosure one: if it is never written down who agreed to what, there is nothing to hold anyone to later |
+
+Full principle-by-principle detail (all eight, including the ones already satisfied structurally
+by RBAC and the correction use case) is in `05-architecture/cross-cutting.md`, "Regulatory
+compliance — Habeas Data." This table only lists what is **not** mitigated, cross-referenced back
+into STRIDE.
+
+---
+
 ## Summary
 
-| STRIDE category        | Implemented |                                    Gaps found                                    |
-| ---------------------- | :---------: | :------------------------------------------------------------------------------: |
-| Spoofing               |      5      |                         2 (service-to-service auth, MFA)                         |
-| Tampering              | 2 (partial) |    4 (MQTT/REST transport security, event integrity, explicit input handling)    |
-| Repudiation            |      3      |          2 (soft-delete on audit tables, cross-context audit coverage)           |
-| Information Disclosure |      3      |             3 (IDOR/home isolation, MQTT sniffing, error responses)              |
-| Denial of Service      |      1      | 4 (device flood, API flood, infra DoS; 1 mitigation with a new side-effect risk) |
-| Elevation of Privilege |      4      |                 2 (home-role enforcement, default-deny posture)                  |
+| STRIDE category        | Implemented |                                                   Gaps found                                                   |
+| ---------------------- | :---------: | :------------------------------------------------------------------------------------------------------------: |
+| Spoofing               |      5      |                                        2 (service-to-service auth, MFA)                                        |
+| Tampering              | 2 (partial) |                   4 (MQTT/REST transport security, event integrity, explicit input handling)                   |
+| Repudiation            |      3      |                         2 (soft-delete on audit tables, cross-context audit coverage)                          |
+| Information Disclosure |      3      |                            3 (IDOR/home isolation, MQTT sniffing, error responses)                             |
+| Denial of Service      |      1      |                4 (device flood, API flood, infra DoS; 1 mitigation with a new side-effect risk)                |
+| Elevation of Privilege |      4      |                                2 (home-role enforcement, default-deny posture)                                 |
+| Habeas Data (Law 1581) |      0      | 4 (consent evidence, transport/access security — shared with T3/T4/I4, "my data" access, team confidentiality) |
 
 The most consequential single gap is **R4** (soft delete applied to `audit_log`): it does not just
 leave a threat unmitigated, it quietly weakens a mitigation this document initially credited as
@@ -128,3 +150,5 @@ of this list.
 - Domain event delivery guarantees and DLQ behind D1 → `02-domain/domain-events.md`
 - Unresolved infrastructure decisions this model depends on (MQTT broker, API Gateway, TLS termination) → `05-architecture/deployment.md`, `05-architecture/overview.md`
 - Error handling and rate limiting, both still open → `05-architecture/cross-cutting.md`
+- Full eight-principle Habeas Data table (H1–H4 above only list what is unmitigated) → `05-architecture/cross-cutting.md`, "Regulatory compliance — Habeas Data"
+- The requirement H1–H4 trace back to → `04-requirements/non-functional.md` (ERNF3.1)

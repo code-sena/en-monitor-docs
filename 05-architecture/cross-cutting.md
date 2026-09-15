@@ -138,16 +138,47 @@ if a downstream service is degraded. None of these has been chosen.
 
 ---
 
+## Regulatory compliance — Habeas Data (Law 1581 of 2012)
+
+`04-requirements/non-functional.md` (ERNF3.1) commits this project to complying with Colombia's
+Law 1581 of 2012 (Habeas Data). That law sets eight principles for handling personal data
+(Article 4); the table below checks this project's actual data model
+(`06-data/models.md`) and mechanisms against each one — not a generic compliance checklist, this
+project's own gaps.
+
+Personal data in scope: `Person` (name, last_name, cellphone, address, profile_image), `User`
+(email), and the incidental personal data every table's audit trail carries (`ip_address`,
+`user_agent` in `user_session`; `ip_address` in `login_error_log` and `audit_log`).
+
+| Principle (Art. 4)               | What it requires                                                                                       | Status in this project                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Legalidad                        | Treatment must follow the law and its implementing rules                                               | No project-specific gap beyond the others below — this principle is satisfied by satisfying the rest                                                                                                                                                                                                                                             |
+| Finalidad                        | Each use of personal data must serve a legitimate purpose, stated to the data subject                  | **Not documented.** No privacy notice or stated-purpose text is referenced anywhere in this repository — `HU1`'s "accept the terms and license" scenario (`04-requirements/user-stories.md`) implies one exists as a product artifact, but it is not linked from here                                                                            |
+| Libertad                         | Treatment requires prior, express, informed consent — data cannot be collected or disclosed without it | **Gap.** `HU1`'s acceptance criteria require accepting "terms, conditions, and license permissions" at registration, but `06-data/models.md`'s `user` table has **no field recording that consent was given** — no `terms_accepted_at`, no `consent_version`, nothing. The product requires consent; the schema does not preserve evidence of it |
+| Veracidad o calidad              | Data must be truthful, complete, accurate, and kept up to date                                         | Supported structurally: `UpdateUserProfileUseCase` exists (`05-architecture/hexagonal-architecture.md`) so a data subject can correct their own data, satisfying this principle's practical requirement                                                                                                                                          |
+| Transparencia                    | The data subject can obtain, at any time, information about what data concerning them exists           | **Not implemented.** No use case or endpoint exposes "what data do you hold about me" as a single, dedicated capability — a user can see individual screens of their own data, but there is no consolidated access mechanism                                                                                                                     |
+| Acceso y circulación restringida | Treatment is limited to those authorized by the data subject or by law                                 | Backed by the RBAC mechanism already documented in `05-architecture/pattern-guide.md` and the home-scoped access model (`UserHome`) — access is already structurally restricted, not open by default                                                                                                                                             |
+| Seguridad                        | Technical, human, and administrative measures to prevent alteration, loss, unauthorized access         | **Same gaps already tracked in `05-architecture/security-threat-model.md`** (T3/T4: no TLS decision; I4: no documented home-isolation enforcement) — this principle does not need a new gap, it needs those existing ones resolved                                                                                                               |
+| Confidencialidad                 | Everyone who handles the data must keep it reserved, even after their involvement ends                 | **Not documented.** No confidentiality/NDA expectation for team members handling production data is written down anywhere — relevant given this is a two-person team (`01-context/scope.md`) with direct database access, not an abstract policy question                                                                                        |
+
+**What this adds to the open questions below:** a consent-evidence field on `user` (Libertad), a
+consolidated "my data" capability (Transparencia), and a documented data-handling confidentiality
+expectation for the team (Confidencialidad) are three concrete, new gaps — not restatements of
+the TLS/encryption gaps already tracked elsewhere.
+
+---
+
 ## Open questions — summary
 
-| Concern                   | Status                                                                                   |
-| ------------------------- | ---------------------------------------------------------------------------------------- |
-| Standard logging          | Not decided (library, format, aggregation)                                               |
-| Distributed tracing       | Correlation IDs exist for Kafka events; not propagated over REST; no tracing tool chosen |
-| Centralized configuration | Not decided (where config and secrets live)                                              |
-| Feature flags             | Not decided whether even needed at this scale                                            |
-| Error handling            | No shared response shape or exception-mapping convention documented                      |
-| Retry policies            | Fixed for Kafka consumers; not decided for synchronous REST calls                        |
+| Concern                   | Status                                                                                                                                        |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| Standard logging          | Not decided (library, format, aggregation)                                                                                                    |
+| Distributed tracing       | Correlation IDs exist for Kafka events; not propagated over REST; no tracing tool chosen                                                      |
+| Centralized configuration | Not decided (where config and secrets live)                                                                                                   |
+| Feature flags             | Not decided whether even needed at this scale                                                                                                 |
+| Error handling            | No shared response shape or exception-mapping convention documented                                                                           |
+| Retry policies            | Fixed for Kafka consumers; not decided for synchronous REST calls                                                                             |
+| Habeas Data (Law 1581)    | Partially met structurally (RBAC, correction); consent evidence, "my data" access, and team confidentiality expectations are not yet in place |
 
 None of these block the data model or domain work already done in `02-domain/` and `06-data/`,
 but each one will need an owner and a decision before `09-microservices/` implementation details
@@ -164,3 +195,6 @@ can be written consistently across all six services.
 - Deployment constraints (no paid hosting, no Kubernetes) that narrow the realistic options above
   → `05-architecture/deployment.md`, `01-context/scope.md`
 - Security-relevant audit trail (distinct from application logging) → `06-data/models.md` (`audit_log`, `login_error_log`)
+- The requirement this section's new compliance table traces back to → `04-requirements/non-functional.md` (ERNF3.1)
+- Personal data fields referenced above → `06-data/models.md` (`person`, `user`, `user_session`)
+- Security gaps this Habeas Data table reuses rather than duplicates → `05-architecture/security-threat-model.md` (T3, T4, I4)
