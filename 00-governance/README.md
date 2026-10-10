@@ -5,6 +5,17 @@
 
 ---
 
+## Project Context
+
+Energy Monitor is a system for monitoring electrical energy consumption with:
+- **Backend:** Spring Boot modular monolith using Spring Modulith, Domain-Driven Design (DDD) and Hexagonal Architecture (ports & adapters). Each module corresponds to a bounded context and is treated as a future microservice.
+- **Frontend Web:** React + Vite (TypeScript/JavaScript)
+- **Frontend Mobile:** React Native + Expo (TypeScript)
+
+Bounded contexts (modules): `security`, `home`, `device`, `measurement`, `alert`, `recommendation`, `notification`.
+
+---
+
 ## Documents in this section
 
 | File | Purpose |
@@ -14,7 +25,7 @@
 | [definition-of-done.md](./definition-of-done.md) | Checklist that every completed user story must satisfy |
 | [definition-of-ready.md](./definition-of-ready.md) | Checklist for a user story to enter a sprint |
 | [documentation-rules.md](./documentation-rules.md) | How to write, update, and delete documentation |
-| [microservices-documentation.md](./microservices-documentation.md) | Required documents per microservice |
+| [microservices-documentation.md](./microservices-documentation.md) | Required documents per bounded context/module (preparing for microservices migration) |
 | [security-policy.md](./security-policy.md) | How the team handles vulnerabilities and security incidents |
 | [security-rules.md](./security-rules.md) | Code-level security rules: secrets, auth, input validation |
 
