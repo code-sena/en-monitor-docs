@@ -955,19 +955,35 @@ INV-038: `min_limit` and `max_limit` must define a valid interval.
 
 **Description:** Notification raised when a relevant condition occurs, such as excessive consumption or a device that stops reporting.
 
-**Attributes:**
+**Cross-context references:** `homeId`, `deviceId`, `consumptionLevelId` and `measurementId` reference other bounded contexts at application level only; they stay plain `String`s because those aggregates cannot be imported here.
 
-| Attribute | Type | Description | Required | Rules |
-|-----------|------|-------------|---------|-------|
-| `id_alert` | `VARCHAR(10)` | Identifier | Yes | Primary key |
-| `id_home` | `VARCHAR(10)` | Affected home | Yes | FK, not null |
-| `id_device` | `VARCHAR(10)` | Related device | No | FK |
-| `type` | `AlertType` | Alert type | Yes | Not null |
-| `message_key` | `VARCHAR(100)` | Translatable message key | Yes | Not null |
-| `date_time` | `DATETIME` | Creation timestamp | Yes | Not null |
-| `alert_status` | `AlertStatus` | Current alert state | Yes | Not null |
-| `id_consumption_level` | `VARCHAR(10)` | Related consumption level | No | FK |
-| `id_measurement` | `VARCHAR(10)` | Related measurement | No | FK |
+**Type consistency (MER note on `alert`):**
+- **THRESHOLD alerts** must carry `consumptionLevelId` and `measurementId` (`ALERT-INV-007`).
+- **CONNECTIVITY alerts** must carry neither (`ALERT-INV-008`).
+- **DEVICE alerts** are informational, e.g. a module was linked to the home (`ALERT-INV-009`).
+- **LIMIT alerts** are home-scoped, carrying no device (`ALERT-INV-010`).
+
+The rule is enforced here, in the domain, so no persistence path can bypass it. Prefer the `threshold`, `connectivity`, `device`, and `limit` factories: they make an inconsistent alert unrepresentable by construction.
+
+**Invariants:**
+
+```
+INV-039: An alert is created in `PENDING` and later resolved.
+INV-040: `AlertSeverity` is not persisted; it is derived at runtime.
+INV-041: A threshold alert must reference a valid `ConsumptionLevel` owned by Monitoring and Measurements, or a valid measurement.
+INV-042: A connectivity alert must not carry `consumptionLevelId` nor `measurementId`.
+INV-043: A device alert must not carry `consumptionLevelId` nor `measurementId`.
+INV-044: A limit alert must not carry `consumptionLevelId` nor `measurementId` nor `deviceId`.
+```
+
+**Factories (use these instead of direct construction to enforce type consistency):**
+
+| Factory | Parameters | Returns |
+|---------|-----------|---------|
+| `Alert.threshold(idAlert, homeId, deviceId, messageKey, dateTime, consumptionLevelId, measurementId)` | All as `String`; consumptionLevelId and measurementId required for THRESHOLD | New `Alert` with `type = THRESHOLD` |
+| `Alert.connectivity(idAlert, homeId, deviceId, messageKey, dateTime)` | All as `String`; deviceId may be null | New `Alert` with `type = CONNECTIVITY` |
+| `Alert.device(idAlert, homeId, deviceId, messageKey, dateTime)` | All as `String`; informational, resolving means "seen" | New `Alert` with `type = DEVICE` |
+| `Alert.limit(idAlert, homeId, messageKey, dateTime)` | All as `String`; home-scoped, no device | New `Alert` with `type = LIMIT` |
 
 **Lifecycle / States:**
 
@@ -986,32 +1002,116 @@ INV-038: `min_limit` and `max_limit` must define a valid interval.
 | `RESOLVED` | Alert has been handled successfully | Terminal state |
 | `CANCELLED` | Alert was dismissed, invalidated, or superseded | Terminal state |
 
-**Invariants:**
-
-```
-INV-039: An alert is created in `PENDING` and later resolved.
-INV-040: `AlertSeverity` is not persisted; it is derived at runtime.
-INV-041: A threshold alert must reference a valid `ConsumptionLevel` or a valid measurement.
-```
+---
 
 ---
 
-### Entity: Recommendation
+### Entity: Notification
 
-**Context:** Recommendations
+**Context:** Notification
 
-**Description:** Suggestion generated from a home's observed consumption behavior and usage patterns.
+**Description:** A record that an outbound message was attempted, over which channel, and whether it succeeded. Owned by the Notification context, it answers the question no other module can: was a message actually sent, and did it fail?
+
+**The message body is deliberately not stored.** A password recovery secret travels in that body, and a column holding it in clear text would undo the decision to keep only a hash elsewhere. What is stored instead is `messageKey`: a stable name for the wording used, which is enough to explain the row to somebody reading it during an audit and is not itself the message.
+
+**Source identification:** The message originates from another bounded context, named by `sourceType` and `sourceId` rather than by a foreign key. This avoids database-level coupling between modules. The identifiers are therefore references without integrity: nothing here can check that the row they name still exists, and nothing here should.
+
+**User reference:** `userId` is the one reference that is not optional, because a message with no recipient on file cannot be traced back to anybody. `homeId` is optional for messages that belong to an account and not to a home, such as a recovery code.
+
+**Invariants:**
+
+```
+NOTIF-INV-001: a notification is created PENDING, never directly SENT.
+NOTIF-INV-002: SENT carries the instant it was sent.
+NOTIF-INV-003: FAILED carries a reason.
+NOTIF-INV-004: SENT carries no reason, because it did not fail.
+NOTIF-INV-005: a notification always names a user.
+```
+
+**readAt is part of the documented model and the column exists, but nothing writes it yet:** no endpoint reports that a message was opened, so the field is always null. It is kept because the model asks for it and adding the column later is a migration; the one thing to know is that a non-null value cannot be expected today.
+
+**Lifecycle / States:**
+
+```
+[PENDING] ──(markAsSent)──▶ [SENT]
+                │              │
+                │          (markAsFailed)
+                ▼              ▼
+             [FAILED]
+```
+
+| State | Description | Allowed transitions |
+|-------|-------------|---------------------|
+| `PENDING` | A delivery attempt has not been made yet | → `SENT`, → `FAILED` |
+| `SENT` | The message was successfully delivered | Terminal for this delivery attempt |
+| `FAILED` | The message delivery failed | Terminal for this delivery attempt |
+
+**Factory:**
+
+| Factory | Parameters | Returns |
+|---------|-----------|---------|
+| `Notification.pending(idNotification, userId, homeId, channel, sourceType, sourceId, messageKey)` | `userId` required; `homeId` and `sourceId` optional; channel and sourceType required | New `Notification` with `deliveryStatus = PENDING` |
+
+**Methods:**
+
+| Method | Parameters | Effect |
+|---------|-----------|--------|
+| `markAsSent(sentAt)` | `sentAt` required | Sets `deliveryStatus = SENT`; clears `failureReason`; stores `sentAt` |
+| `markAsFailed(reason)` | `reason` optional (truncated to column width) | Sets `deliveryStatus = FAILED`; stores `failureReason` |
+| `markAsRead(readAt)` | `readAt` required; throws `IllegalStateException` if `deliveryStatus != SENT` | Stores `readAt`; only meaningful once the message has been sent |
 
 **Attributes:**
 
 | Attribute | Type | Description | Required | Rules |
 |-----------|------|-------------|---------|-------|
-| `id_recommendation` | `VARCHAR(10)` | Identifier | Yes | Primary key |
+| `id_notification` | `VARCHAR(10)` | Identifier | Yes | Primary key |
+| `user_id` | `VARCHAR(10)` | The account the message is for | Yes | FK, not null |
+| `home_id` | `VARCHAR(10)` | The home it concerns, optional | No | FK |
+| `channel` | `NotificationChannel` | Delivery channel | Yes | Not null |
+| `source_type` | `NotificationSourceType` | The context the message originates from | Yes | Not null |
+| `source_id` | `VARCHAR(10)` | The row in that context, optional | No | FK |
+| `message_key` | `VARCHAR(100)` | Stable name of the wording used | Yes | Not null |
+| `delivery_status` | `NotificationStatus` | Current delivery status | Yes | Not null |
+| `sent_at` | `LOCALDATE TIME` | When it was sent, present only when sent | Yes | — |
+| `read_at` | `LOCALDATE TIME` | When it was read, absent while unread | No | Always null until sent |
+| `failure_reason` | `VARCHAR(200)` | Why the message did not go out, present only when failed | No | — |
+| `deleted_at` | `LOCALDATE TIME` | Soft delete marker | No | Terminal state |
+
+**Methods (continued):**
+
+| Method | Parameters | Effect |
+|---------|-----------|--------|
+| `failureReason(String reason)` | Raw reason from driver/mail server | Returns the reason, trimmed and cut to `MAX_REASON` (200) characters |
+| `idNotification()` | — | Returns `id_notification` |
+| `userId()` | — | Returns `user_id` |
+| `homeId()` | — | Returns `home_id` |
+| `channel()` | — | Returns `channel` |
+| `sourceType()` | — | Returns `source_type` |
+| `sourceId()` | — | Returns `source_id` |
+| `messageKey()` | — | Returns `message_key` |
+| `deliveryStatus()` | — | Returns `delivery_status` |
+| `failureReason()` | — | Returns `failure_reason` |
+| `sentAt()` | — | Returns `sent_at` |
+| `readAt()` | — | Returns `read_at` |
+| `deletedAt()` | — | Returns `deleted_at` |
+
+---
+
+**Attributes:**
+
+| Attribute | Type | Description | Required | Rules |
+|-----------|------|-------------|---------|-------|
+| `id_recommendation` | `VARCHAR(10)` | Recommendation identifier | Yes | Primary key |
 | `id_home` | `VARCHAR(10)` | Affected home | Yes | FK, not null |
 | `id_device` | `VARCHAR(10)` | Related device, if applicable | No | FK |
 | `message_key` | `VARCHAR(100)` | Translatable message key | Yes | Not null |
 | `date_time` | `DATETIME` | Creation timestamp | Yes | Not null |
-| `status` | `NotificationsStatus` | Read/unread state | Yes | Not null |
+| `consumption_level_id` | `VARCHAR(10)` | Related consumption level | No | FK |
+| `status` | `RecommendationStatus` | Read/unread state | Yes | Not null |
+
+**Cross-context references:** `idHome` and `idDevice` reference other bounded contexts at application level only; they stay plain `String`s because those aggregates cannot be imported here.
+
+**Type consistency:** Recommendations are generated when a consumption pattern meets a threshold or when behavioral analysis identifies an opportunity. The `consumptionLevelId` links to a level defined in Monitoring and Measurements.
 
 **Lifecycle / States:**
 
@@ -1029,7 +1129,27 @@ INV-041: A threshold alert must reference a valid `ConsumptionLevel` or a valid 
 ```
 INV-042: A recommendation must be either `READ` or `UNREAD`.
 INV-043: A recommendation informs the user; it does not block the flow.
+INV-044: A recommendation may reference a `ConsumptionLevel` owned by Monitoring and Measurements, or carry none.
+INV-045: A recommendation must reference a valid home owned by Home Management.
 ```
+
+**Factory:**
+
+| Factory | Parameters | Returns |
+|---------|-----------|---------|
+| `Recommendation(idRecommendation, idHome, idDevice, messageKey, dateTime, consumptionLevelId, status)` | All as `String`; consumptionLevelId and deviceId optional | New `Recommendation` with given status |
+
+**Methods:**
+
+| Method | Parameters | Effect |
+|---------|-----------|--------|
+| `markAsRead()` | — | Changes `status` from `UNREAD` to `READ`; throws `IllegalStateException` if already `READ` |
+| `idRecommendation()` | — | Returns `id_recommendation` |
+| `homeId()` | — | Returns `id_home` |
+| `deviceId()` | — | Returns `id_device` |
+| `messageKey()` | — | Returns `message_key` |
+| `consumptionLevelId()` | — | Returns `consumption_level_id` |
+| `status()` | — | Returns `status` |
 
 ---
 
