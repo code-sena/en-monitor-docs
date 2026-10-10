@@ -140,6 +140,356 @@ Device → [PublishReading] → Monitoring and Measurements → [MeasurementReco
 > ever stated — this note exists so the gap is visible instead of silently assumed away.
 
 ---
+---
+---
+### Event: DeviceConnectivityRestored
+
+| Field | Value |
+|-------|-------|
+| **Name** | `DeviceConnectivityRestored` |
+| **Bounded Context** | Devices |
+| **Aggregate** | `Device` (recorded through `DeviceStatusLog`) |
+| **Trigger** | A device that was offline resumes publishing measurements within the timeout |
+| **Consumers** | Alerts (may auto-resolve a `CONNECTIVITY` alert) |
+| **Channel (topic)** | Kafka topic `devices.device-connectivity-restored` |
+| **Partition key** | `deviceId` |
+| **Schema version** | `v1` |
+| **Delivery guarantee** | At-least-once |
+
+**Payload (JSON schema):**
+
+```json
+{
+  "eventId": "880e8400-e29b-41d4-a716-446655440000",
+  "eventType": "DeviceConnectivityRestored",
+  "aggregateId": "880e8400-e29b-41d4-a716-446655440001",
+  "aggregateType": "Device",
+  "occurredAt": "2026-09-09T14:40:00Z",
+  "version": 1,
+  "payload": {
+    "deviceId": "string — the device that resumed reporting",
+    "homeId": "string — the home the device belongs to",
+    "rssi": "number — optional signal strength at reconnection"
+  },
+  "metadata": {
+    "correlationId": "990e8400-e29b-41d4-a716-446655440002",
+    "causationId": null
+  }
+}
+```
+
+> The `homeId` is included because the Devices context owns the `DeviceHome` relationship,
+> just like `DeviceConnectivityLost`. Consumers in the Alerts context may use this event to
+> auto-resolve a previously-raised `CONNECTIVITY` alert for the same device and home.
+
+**What do consumers do with this event?**
+
+| Consuming service | Action | Idempotent? |
+|--------------------|--------|-------------|
+| Alerts | May auto-resolve a `CONNECTIVITY` alert if one exists for this device and home | Yes — uses `eventId` as the idempotency key |
+
+---
+---
+---
+### Event: DeviceLinked
+
+| Field | Value |
+|-------|-------|
+| **Name** | `DeviceLinked` |
+| **Bounded Context** | Devices |
+| **Aggregate** | `Device` |
+| **Trigger** | A device is successfully linked to a home via the access code flow |
+| **Consumers** | Home Management (updates `DeviceHome` relationship), Alerts (device now reports to home) |
+| **Channel (topic)** | Kafka topic `devices.device-linked` |
+| **Partition key** | `deviceId` |
+| **Schema version** | `v1` |
+| **Delivery guarantee** | At-least-once |
+
+**Payload (JSON schema):**
+
+```json
+{
+  "eventId": "AA0e8400-e29b-41d4-a716-446655440000",
+  "eventType": "DeviceLinked",
+  "aggregateId": "AA0e8400-e29b-41d4-a716-446655440001",
+  "aggregateType": "Device",
+  "occurredAt": "2026-09-09T14:45:00Z",
+  "version": 1,
+  "payload": {
+    "deviceId": "string — the device that was linked",
+    "homeId": "string — the home the device was linked to",
+    "accessCode": "string — the code used to link the device"
+  },
+  "metadata": {
+    "correlationId": "BB0e8400-e29b-41d4-a716-446655440002",
+    "causationId": null
+  }
+}
+```
+
+> The `homeId` and `accessCode` are included because the linkage is a home-management event;
+> the Devices context does not store the home association itself — it is the `DeviceHome`
+> relationship in the Home Management context that records the link.
+
+**What do consumers do with this event?**
+
+| Consuming service | Action | Idempotent? |
+|--------------------|--------|-------------|
+| Home Management | Records the `DeviceHome` relationship (idempotent if already linked) | Yes — uses `eventId` as the idempotency key |
+| Alerts | Device is now associated with a home for alert evaluation | Yes |
+
+---
+---
+---
+### Event: DeviceUnlinked
+
+| Field | Value |
+|-------|-------|
+| **Name** | `DeviceUnlinked` |
+| **Bounded Context** | Devices / Home Management |
+| **Aggregate** | `Device` (aggregate root), `UserHome` (relationship) |
+| **Trigger** | A device is unlinked from a home (either by the owner or by account deletion) |
+| **Consumers** | Home Management (removes `DeviceHome` relationship), Alerts (device no longer reports to home) |
+| **Channel (topic)** | Kafka topic `devices.device-unlinked` |
+| **Partition key** | `deviceId` |
+| **Schema version** | `v1` |
+| **Delivery guarantee** | At-least-once |
+
+**Payload (JSON schema):**
+
+```json
+{
+  "eventId": "CC0e8400-e29b-41d4-a716-446655440000",
+  "eventType": "DeviceUnlinked",
+  "aggregateId": "CC0e8400-e29b-41d4-a716-446655440001",
+  "aggregateType": "Device",
+  "occurredAt": "2026-09-09T14:50:00Z",
+  "version": 1,
+  "payload": {
+    "deviceId": "string — the device that was unlinked",
+    "homeId": "string — the home the device was unlinked from",
+    "reason": "string — optional: MANUAL, ACCOUNT_DELETED, etc."
+  },
+  "metadata": {
+    "correlationId": "DD0e8400-e29b-41d4-a716-446655440002",
+    "causationId": null
+  }
+}
+```
+
+> The `reason` field is optional; if absent, the unlink is assumed to be manual via the UI.
+> If `ACCOUNT_DELETED`, the `AccountDeleted` event will also be emitted.
+
+**What do consumers do with this event?**
+
+| Consuming service | Action | Idempotent? |
+|--------------------|--------|-------------|
+| Home Management | Removes the `DeviceHome` relationship; device is disassociated from the home | Yes — uses `eventId` as the idempotency key |
+| Alerts | Device is no longer associated with a home; related alerts may be resolved or removed | Yes |
+
+---
+---
+---
+### Event: DeviceRegistered
+
+| Field | Value |
+|-------|-------|
+| **Name** | `DeviceRegistered` |
+| **Bounded Context** | Devices |
+| **Aggregate** | `Device` |
+| **Trigger** | A new device is registered in the system (creates the `Device` entity) |
+| **Consumers** | None directly — this is an internal state change event; other services may query the device registry |
+| **Channel (topic)** | Kafka topic `devices.device-registered` (optional; may be internal-only) |
+| **Partition key** | `deviceId` |
+| **Schema version** | `v1` |
+| **Delivery guarantee** | At-least-once |
+
+**Payload (JSON schema):**
+
+```json
+{
+  "eventId": "EE0e8400-e29b-41d4-a716-446655440000",
+  "eventType": "DeviceRegistered",
+  "aggregateId": "EE0e8400-e29b-41d4-a716-446655440001",
+  "aggregateType": "Device",
+  "occurredAt": "2026-09-09T15:00:00Z",
+  "version": 1,
+  "payload": {
+    "deviceId": "string — the newly registered device",
+    "deviceCode": "string — the short code identifying the device",
+    "apiKeyHash": "string — hash of the device's API key (one-way, for verification)"
+  },
+  "metadata": {
+    "correlationId": "FF0e8400-e29b-41d4-a716-446655440002",
+    "causationId": null
+  }
+}
+```
+
+> The `apiKeyHash` is included for security verification; the raw `api_key` is never stored or transmitted in events.
+
+**What do consumers do with this event?**
+
+| Consuming service | Action | Idempotent? |
+|--------------------|--------|-------------|
+| None (internal registry update) | — | N/A |
+
+---
+---
+---
+### Event: AlertRaised
+
+| Field | Value |
+|-------|-------|
+| **Name** | `AlertRaised` |
+| **Bounded Context** | Alerts |
+| **Aggregate** | `Alert` |
+| **Trigger** | An alert transitions from `PENDING` to `ACTIVE` state |
+| **Consumers** | Notification (delivers the alert via email/push) |
+| **Channel (topic)** | Kafka topic `alerts.alert-raised` |
+| **Partition key** | `idAlert` |
+| **Schema version** | `v1` |
+| **Delivery guarantee** | At-least-once |
+
+**Payload (JSON schema):**
+
+```json
+{
+  "eventId": "GG0e8400-e29b-41d4-a716-446655440000",
+  "eventType": "AlertRaised",
+  "aggregateId": "GG0e8400-e29b-41d4-a716-446655440001",
+  "aggregateType": "Alert",
+  "occurredAt": "2026-09-09T15:05:00Z",
+  "version": 1,
+  "payload": {
+    "idAlert": "string — the alert identifier",
+    "idHome": "string — the affected home",
+    "idDevice": "string — the related device, if any (null for LIMIT alerts)",
+    "type": "string — one of: THRESHOLD, CONNECTIVITY, DEVICE, LIMIT",
+    "messageKey": "string — translatable message key",
+    "consumptionLevelId": "string — the consumption level, if THRESHOLD alert",
+    "dateTime": "string — when the alert was raised (ISO 8601)"
+  },
+  "metadata": {
+    "correlationId": "HH0e8400-e29b-41d4-a716-446655440002",
+    "causationId": null
+  }
+}
+```
+
+> The `type` field determines which consumers react: `THRESHOLD` and `CONNECTIVITY` are delivered
+> to Notification; `DEVICE` and `LIMIT` may have different handling. The `consumptionLevelId` is
+> only present for `THRESHOLD` alerts and references a level owned by Monitoring and Measurements.
+
+**What do consumers do with this event?**
+
+| Consuming service | Action | Idempotent? |
+|--------------------|--------|-------------|
+| Notification | `AlertRaisedListener` delivers the alert via configured channels (email, Web Push) | Yes — uses `eventId` as the idempotency key; delivers each alert once |
+
+---
+---
+---
+### Event: RecommendationCreated
+
+| Field | Value |
+|-------|-------|
+| **Name** | `RecommendationCreated` |
+| **Bounded Context** | Recommendations |
+| **Aggregate** | `Recommendation` |
+| **Trigger** | A new recommendation is generated from consumption pattern analysis |
+| **Consumers** | Notification (delivers the recommendation via email/push) |
+| **Channel (topic)** | Kafka topic `recommendations.recommendation-created` |
+| **Partition key** | `idRecommendation` |
+| **Schema version** | `v1` |
+| **Delivery guarantee** | At-least-once |
+
+**Payload (JSON schema):**
+
+```json
+{
+  "eventId": "II0e8400-e29b-41d4-a716-446655440000",
+  "eventType": "RecommendationCreated",
+  "aggregateId": "II0e8400-e29b-41d4-a716-446655440001",
+  "aggregateType": "Recommendation",
+  "occurredAt": "2026-09-09T15:10:00Z",
+  "version": 1,
+  "payload": {
+    "idRecommendation": "string — the recommendation identifier",
+    "idHome": "string — the affected home",
+    "messageKey": "string — translatable message key",
+    "consumptionLevelId": "string — the consumption level that triggered the recommendation, if any",
+    "patternId": "string — the pattern ID that generated the recommendation",
+    "dateTime": "string — when the recommendation was created (ISO 8601)"
+  },
+  "metadata": {
+    "correlationId": "JJ0e8400-e29b-41d4-a716-446655440002",
+    "causationId": null
+  }
+}
+```
+
+> The `consumptionLevelId` and `patternId` are optional; some recommendations may be based on
+> general behavioral patterns without a specific consumption level threshold.
+
+**What do consumers do with this event?**
+
+| Consuming service | Action | Idempotent? |
+|--------------------|--------|-------------|
+| Notification | `RecommendationCreatedListener` delivers the recommendation via configured channels (email, Web Push) | Yes — uses `eventId` as the idempotency key; delivers each recommendation once |
+
+---
+---
+---
+### Event: AccountDeleted
+
+| Field | Value |
+|-------|-------|
+| **Name** | `AccountDeleted` |
+| **Bounded Context** | Security |
+| **Aggregate** | `User` |
+| **Trigger** | A user account is soft-deleted (lifecycle: `ACTIVE` → `DELETED`) |
+| **Consumers** | Home (`AccountDeletedListener`), Notification (may notify related parties) |
+| **Channel (topic)** | Kafka topic `security.account-deleted` |
+| **Partition key** | `idUser` |
+| **Schema version** | `v1` |
+| **Delivery guarantee** | At-least-once |
+
+**Payload (JSON schema):**
+
+```json
+{
+  "eventId": "KK0e8400-e29b-41d4-a716-446655440000",
+  "eventType": "AccountDeleted",
+  "aggregateId": "KK0e8400-e29b-41d4-a716-446655440001",
+  "aggregateType": "User",
+  "occurredAt": "2026-09-09T15:15:00Z",
+  "version": 1,
+  "payload": {
+    "idUser": "string — the user whose account was deleted",
+    "deletedEmail": "string — the email address, transformed to `deleted+<id>@deleted.invalid`",
+    "reason": "string — optional reason for deletion",
+    "permanent": "boolean — whether this is a permanent deletion"
+  },
+  "metadata": {
+    "correlationId": "LL0e8400-e29b-41d4-a716-446655440002",
+    "causationId": null
+  }
+}
+```
+
+> The `deletedEmail` follows the pattern `deleted+<id>@deleted.invalid` so that the address can be
+> reused in the future without conflicts. The `home` context listens for this event to soft-delete
+> related entities (`user_home`, `home`, `device_home`, etc.) within the same transaction.
+
+**What do consumers do with this event?**
+
+| Consuming service | Action | Idempotent? |
+|--------------------|--------|-------------|
+| Home | Soft-deletes the home and all related entities (`user_home`, `device_home`, thresholds, alerts, recommendations); releases the email address | Yes — uses `eventId` as the idempotency key |
+| Notification | May send a final delivery confirmation or cleanup notification | Yes |
+
+---
 
 ## Standard fields for all events
 
@@ -170,10 +520,17 @@ events about the same `deviceId` are always processed in order by the same consu
 The partition key is not part of the JSON payload; it is passed to the producer separately (the
 Kafka record key), per the client library in use (Spring Kafka on this project's backend).
 
-**Transport:** domain events in this catalog travel over **Apache Kafka**, kept separate from the
-MQTT channel used for device-to-backend telemetry (`01-context/scope.md`, feature #11) — MQTT is
-never used for service-to-service events. See `ADR-002-domain-event-transport.md` in
-`05-architecture/decisions/records/` for the alternatives evaluated and why Kafka was chosen.
+**Transport:** Domain events in this catalog are **Spring Framework events published in memory**
+within the modular monolith. They are not sent over Apache Kafka or any external broker. The
+`MeasurementRecorded` and `DeviceConnectivityLost` events are raised by the domain layer and
+consumed by other modules within the same Spring application context. This design choice
+reflects the modular monolith architecture (Spring Modulith) where in-process event delivery
+is sufficient and avoids the complexity of a distributed event bus for the current deployment.
+
+MQTT is used only for device-to-backend telemetry (device → backend), never for service-to-service
+events. The transport mechanism is documented in `05-architecture/decisions/records/ADR-002-domain-event-transport.md`,
+which previously evaluated Kafka as an alternative but the implementation chose in-memory Spring
+events for the modular monolith.
 
 ---
 
@@ -255,6 +612,13 @@ Step 5: Stop publishing EventV1
 |-------|-----------------|-------|-----------|---------|
 | `MeasurementRecorded` | Monitoring and Measurements | `monitoring.measurement-recorded` | Alerts, Recommendations | v1 |
 | `DeviceConnectivityLost` | Devices | `devices.device-connectivity-lost` | Alerts | v1 |
+| `DeviceConnectivityRestored` | Devices | `devices.device-connectivity-restored` | Alerts (may auto-resolve) | v1 |
+| `DeviceLinked` | Devices | `devices.device-linked` | Home Management, Alerts | v1 |
+| `DeviceUnlinked` | Devices / Home Management | `devices.device-unlinked` | Home Management, Alerts | v1 |
+| `DeviceRegistered` | Devices | (internal registry) | None (internal) | v1 |
+| `AlertRaised` | Alerts | `alerts.alert-raised` | Notification | v1 |
+| `RecommendationCreated` | Recommendations | `recommendations.recommendation-created` | Notification | v1 |
+| `AccountDeleted` | Security | `security.account-deleted` | Home, Notification | v1 |
 
 ---
 
@@ -267,6 +631,12 @@ A **Policy** describes what happens automatically when an event arrives: "whenev
 | `MeasurementRecorded` | Whenever the classified consumption level is `HIGH` or `CRITICAL`, raise an alert | `RaiseThresholdAlert` | Alerts |
 | `MeasurementRecorded` | Whenever the reading meaningfully changes the home's consumption pattern, generate a suggestion | `GenerateRecommendation` | Recommendations |
 | `DeviceConnectivityLost` | Whenever a device stops reporting past the timeout, raise an alert | `RaiseConnectivityAlert` | Alerts |
+| `DeviceConnectivityRestored` | Whenever a device resumes reporting, may auto-resolve a `CONNECTIVITY` alert | — | Alerts |
+| `DeviceLinked` | Whenever a device is linked to a home, record the `DeviceHome` relationship | — | Home Management |
+| `DeviceUnlinked` | Whenever a device is unlinked from a home, remove the `DeviceHome` relationship | — | Home Management |
+| `AlertRaised` | Whenever an alert becomes active, deliver it via configured channels | — | Notification |
+| `RecommendationCreated` | Whenever a recommendation is generated, deliver it via configured channels | — | Notification |
+| `AccountDeleted` | Whenever an account is soft-deleted, cascade the deletion to related entities | — | Home, Notification |
 
 ---
 
