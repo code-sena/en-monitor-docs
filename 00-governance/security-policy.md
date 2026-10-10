@@ -22,11 +22,11 @@
 
 | Property | Required value |
 |----------|---------------|
-| Signing algorithm | RS256 (asymmetric) or HS256 with 256+ bit secret |
-| Access token expiration | 1 hour (`exp`) |
-| Refresh token expiration | 7 days |
-| Required claims | `sub` (userId), `iat`, `exp`, `jti` (unique token ID) |
-| Client storage | `httpOnly cookie` (web) or Keychain/Keystore (mobile) |
+| Signing algorithm | RS256 (asymmetric). Private/public keys configured via paths. |
+| Access token expiration | 15 minutes (`exp`) (as implemented) |
+| Refresh token expiration | 7 days (rotation on use as implemented) |
+| Required claims | `sub` (userId), `iat`, `exp`, `jti` (unique token ID), `iss`, `scope`/roles as applicable |
+| Client storage | Secure storage (httpOnly cookie for web where applicable) or secure mobile storage (Keychain/Keystore) |
 
 **Prohibited in the payload:**
 - Passwords
@@ -46,32 +46,18 @@
 
 ### RBAC (Role-Based Access Control)
 
-| Role | Description | Permissions |
-|------|-------------|------------|
-| `SUPER_ADMIN` | System technical administrator | All |
-| `ADMIN` | Business administrator | [define] |
-| `OPERATOR` | Operator with write permissions | [define] |
-| `VIEWER` | Read-only | [define] |
-| `[CUSTOM_ROLE]` | [description] | [define] |
+The system implements RBAC with system roles and permissions. Global roles are assigned via `UserSystemRole`. Home-scoped roles (`OWNER`, `MEMBER`) exist for home membership and are separate from global system roles.
 
 **Permission model:**
 
 ```
 Permission: [resource]:[action]
-
-Examples:
-  orders:create
-  orders:read
-  orders:update
-  orders:delete
-  users:read
-  reports:export
 ```
 
 **Validation:**
-- The API Gateway validates the JWT (signature and expiration)
-- Each service validates the role permissions for the specific operation
-- Roles are included in the JWT as claim `roles: ["OPERATOR", "VIEWER"]`
+- JWT signature and expiration are validated on each request (resource server)
+- Each bounded context validates permissions for protected operations as per use cases
+- Access control is enforced at the application/use case layer (not only controllers)
 
 ---
 
@@ -86,6 +72,7 @@ Examples:
 
 ### Internal service-to-service communication
 
+In the current modular monolith (Spring Modulith), internal communication happens within the same process via application events and method calls across module boundaries as allowed by `@ApplicationModule`. For future microservices:
 - mTLS for service-to-service communication in production (if possible with service mesh)
 - Bearer token or internal API key for services that do not support mTLS
 
@@ -107,6 +94,8 @@ Examples:
 - API keys: every 90 days
 - TLS certificates: 60 days before expiration
 - DB passwords: every 6 months or immediately if compromise is suspected
+- JWT private keys: rotate per key management policy
+- Password reset pepper: rotate with careful handling (invalidates existing codes)
 
 ---
 
