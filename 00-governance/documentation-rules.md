@@ -24,7 +24,7 @@ The DoD requires it.
 | Branch names | English |
 | Markdown documentation | English |
 | OpenAPI contracts (descriptions) | English |
-| Error messages returned to frontend | English (or localized) |
+| Error messages returned to frontend | English |
 | Internal system logs | English |
 
 > **Rule:** Once the language for each category is chosen, it is binding for the entire project.
@@ -51,8 +51,8 @@ ADRs are numbered sequentially: ADR-001-short-title.md.
 |------|-------|
 | Non-obvious architectural decisions | `05-architecture/decisions/records/ADR-NNN.md` |
 | Business rules and domain invariants | `02-domain/entities-and-rules.md` |
-| API contracts for each service | `07-api/contracts/openapi/[service].yaml` |
-| Data model changes | `06-data/models.md` |
+| API contracts for each bounded context/module | `07-api/contracts/openapi/[module].yaml` |
+| Data model changes | `06-data/models.md` or module documentation |
 | Operational procedures | `13-operations/` |
 | Identified risks | `15-project-control/risks.md` |
 
@@ -73,8 +73,8 @@ ADRs are numbered sequentially: ADR-001-short-title.md.
 | `02-domain/` | Tech Lead + PO | When the domain changes |
 | `04-requirements/` | Product Owner | Each sprint |
 | `05-architecture/` | Tech Lead | Each design decision |
-| `07-api/contracts/` | Service-owning developer | Each API change |
-| `09-microservices/` | Service-owning developer | Each release |
+| `07-api/contracts/` | Module/bounded context owner | Each API change |
+| `09-microservices/` | Module/bounded context owner | When applicable (microservices transition) |
 | `13-operations/` | DevOps / On-call | After each incident |
 | `15-project-control/` | Tech Lead | Weekly review |
 
