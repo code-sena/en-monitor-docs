@@ -190,8 +190,8 @@ src/main/java/.../security/
 └── SecurityServiceApplication.java        # Spring Boot bootstrap
 ```
 
-`home-service`, `device-service`, `measurement-service`, `alert-service`, and
-`recommendation-service` mirror this exact package layout, with their own aggregates, use cases,
+`home-service`, `device-service`, `measurement-service`, `alert-service`, `recommendation-service`,
+and `notification-service` mirror this exact package layout, with their own aggregates, use cases,
 and ports in place of Security's.
 
 ---
