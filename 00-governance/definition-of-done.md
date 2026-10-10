@@ -18,20 +18,19 @@
 - [ ] Acceptance criteria verified (manual or automated)
 
 ### Integration
-- [ ] Changes do not break other services (integration tests pass)
-- [ ] If API changes: OpenAPI contract updated in `07-api/contracts/`
-- [ ] If data model changes: service `data-model.md` updated
-- [ ] If new/modified events: `event-catalog.md` updated
+- [ ] Changes do not break other bounded contexts/modules (integration/modulith tests pass)
+- [ ] If API changes: OpenAPI contract updated in `07-api/contracts/` (or per module documentation)
+- [ ] If data model changes: bounded context/module documentation updated (e.g., `data-model.md`)
+- [ ] If new/modified events: event catalog updated
 
 ### Deployment
 - [ ] Code is mergeable to `dev` (no conflicts)
-- [ ] CI/CD green on the branch
-- [ ] Deployed to staging environment
-- [ ] Basic smoke test passing on staging
+- [ ] Deployed to staging environment (when applicable)
+- [ ] Basic smoke test passing on staging (when applicable)
 
 ### Documentation
-- [ ] Service `README.md` updated if the public interface changed
-- [ ] If a significant technical decision was made: ADR created or updated
+- [ ] Module/bounded context `README.md` or relevant documentation updated if the public interface changed
+- [ ] If a significant technical decision was made: ADR created or updated in `05-architecture/decisions/records/`
 
 ---
 
