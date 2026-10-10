@@ -25,7 +25,7 @@ Before moving a User Story to "Ready for Sprint", verify:
 
 ### Dependencies
 
-- [ ] All external dependencies (other services, APIs, data) are identified
+- [ ] All external dependencies (other bounded contexts/modules, APIs, data) are identified
 - [ ] Blocking dependencies are resolved OR a workaround is defined
 - [ ] If it depends on another story, that story is already Done or In Progress
 
@@ -40,7 +40,7 @@ Before moving a User Story to "Ready for Sprint", verify:
 - [ ] The necessary accesses and environments are available
 - [ ] The API contracts (OpenAPI) are defined if the story involves new endpoints
 - [ ] There is a definition of the data model if there are DB changes
-- [ ] The impact on other services is identified
+- [ ] The impact on other bounded contexts/modules is identified
 
 ### Non-functional requirements
 
