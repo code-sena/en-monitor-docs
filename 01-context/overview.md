@@ -29,39 +29,48 @@ The measuring device is not a user, but it does act on the system. It authentica
 
 ## Client applications
 
-The system exposes two clients over the same backend API. They are not equivalent: each one
-serves a different moment of use.
+The system exposes two clients over the same backend API. They are not equivalent: each one serves a different moment of use.
 
 | Client | Platform | Purpose |
 |--------|----------|---------|
 | Web application | Browser | Full experience: home and device management, detailed history, statistics, and administration |
 | Mobile application | Android | Day-to-day consultation and alerts, on the device the user already carries |
 
+## Bounded contexts (modules)
+
+The backend is a **modular monolith** built with Spring Modulith. Each module is a bounded context with its own domain model, application layer, and hexagonal architecture (ports & adapters). Modules communicate through well-defined APIs and domain events. Each module is designed to become an independently deployable microservice in the future.
+
+| Context | Module name | Responsibility | Key events published | Depends on |
+|---------|-------------|----------------|---------------------|------------|
+| **Security** | `security` | Identity, authentication, sessions, RBAC, audit trail | — | (none) |
+| **Home Management** | `home` | Homes, membership, home-scoped roles, consumption thresholds | — | `security::api` |
+| **Devices** | `device` | Device registry, device authentication (API key), connectivity tracking | `DeviceConnectivityLost` | `home::api` |
+| **Monitoring and Measurements** | `measurement` | Measurement ingestion, consumption history, statistics, consumption levels | `MeasurementRecorded` | `device::api`, `home::api` |
+| **Alerts** | `alert` | Threshold and connectivity alerts | `AlertRaised` | `home::api`, `device::api`, `measurement::api` |
+| **Recommendations** | `recommendation` | Consumption-based suggestions | `RecommendationCreated` | `device::api`, `measurement::api`, `home::api` |
+| **Notification** | `notification` | Delivery log (email, push) for alerts, recommendations, password reset | — | `security::api`, `home::api`, `device::api`, `alert::api`, `recommendation::api` |
+
 ## Technology stack
 
 | Layer | Technology | Justification |
 |-------|-----------|---------------|
 | Measuring hardware | ESP32 + PZEM-004T V3 + HLK-PM03 | The PZEM measures real electrical magnitudes rather than estimating them; the ESP32 provides Wi-Fi connectivity and enough capacity to report measurements autonomously; the HLK-PM03 allows the device to be powered from the same mains circuit it monitors |
-| Device communication | MQTT over Wi-Fi, via Eclipse Mosquitto (`ADR-007-mqtt-broker-selection.md`) | Designed for constrained devices and unreliable networks; the publish/subscribe model decouples devices from the backend, so neither needs to know the other's internal implementation. Mosquitto's low resource footprint fits a two-person team's development environment |
+| Device communication | MQTT over Wi-Fi, via Eclipse Mosquitto (TLS) | Designed for constrained devices and unreliable networks; the publish/subscribe model decouples devices from the backend. The broker runs in the `devices` repository, not in the backend. |
 | Web frontend | React + Vite | The component-based model fits a dashboard with charts and reusable views; the ecosystem also provides mature support for internationalization and data visualization |
 | Android mobile application | React Native (Android only) | Shares language, component model, and mental model with the web client, so the team maintains one set of skills instead of two; produces a native Android application. iOS is not targeted and is not planned |
-| Backend | Java 21 + Spring Boot | Spring Security and OAuth2 cover the identity requirements without building them from scratch; the ecosystem supports the hexagonal architecture required by the project |
+| Backend | Java 21 + Spring Boot 3.x + Spring Modulith | Spring Security and OAuth2 cover the identity requirements; Spring Modulith enforces module boundaries; the ecosystem supports hexagonal architecture |
 | Database | MySQL | The relational model fits the domain, which contains many relationships; a single shared instance keeps operational complexity low at this stage |
-| Infrastructure | Docker, Jenkins | Provides reproducible environments and independent CI/CD pipelines for each service |
+| Infrastructure | Docker, Docker Compose | Provides reproducible environments for local development and production |
 
-Services are split by business domain and deployed independently, each with its own repository.
-
-They currently share one physical database organized logically by domain. This is a deliberate architectural decision, not a pending migration.
+> **Note:** The backend is a **modular monolith** (single deployable artifact). Modules are separated by Spring Modulith boundaries, not by deployment. Migration to independently deployed microservices is planned but not yet executed.
 
 ## Current status
 
 - **Phase:** In development
-
 - **Current version:** Not yet versioned. No release tags exist.
-
 - **Last release:** None
-
-- **Next milestone:** Build the `Security` context, which owns identity, authentication, sessions, authorization, and auditing. It is a prerequisite for every other context because all of them depend on knowing who the user is.
+- **Implemented bounded contexts:** All 7 contexts are implemented (Security, Home Management, Devices, Monitoring and Measurements, Alerts, Recommendations, Notification)
+- **Next milestone:** Harden cross-module integration tests, document module contracts (OpenAPI), prepare for microservice extraction
 
 ## Project contacts
 
@@ -71,3 +80,10 @@ They currently share one physical database organized logically by domain. This i
 | Developer | Miguel Ángel García Artunduaga | garmiguelangel89@gmail.com |
 
 **Training program:** Software Analysis and Development — SENA, group 314556.
+
+## Correlations
+
+- System scope → `01-context/scope.md`
+- Domain glossary → `01-context/glossary.md`
+- Architecture decisions → `05-architecture/decisions/records/`
+- Module contracts → `07-api/contracts/`
