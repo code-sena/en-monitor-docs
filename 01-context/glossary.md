@@ -28,14 +28,14 @@
 | User Configuration | A user's personal preferences: notification channels, color theme, language, social provider. | Not security configuration. See `Security Configuration`. |
 | Credentials | Email plus password hash used to prove identity. | Passwords are never stored in plain text, only as a hash. |
 | Session | Persisted record of an authenticated login, which can be inspected and revoked. | A user may hold several simultaneous sessions. |
-| Access Token | Short-lived token sent on every request to prove identity and carry claims. | Stateless. Not persisted. |
-| Refresh Token | Long-lived token bound to a persisted `Session`, used to obtain a new access token. | Revocable. Not merely a long-lived access token. |
-| Password Reset Token | Single-use, time-limited token that authorizes changing a forgotten password. | Invalidated after use. |
+| Access Token | Short-lived token sent on every request to prove identity and carry claims. | Stateless. Not persisted. JWT, 15 min TTL, RS256. |
+| Refresh Token | Long-lived token bound to a persisted `Session`, used to obtain a new access token. | Revocable. Not merely a long-lived access token. Rotated on use. |
+| Password Reset Token | Single-use, time-limited token that authorizes changing a forgotten password. | Invalidated after use. HMAC-SHA256 with server-side pepper. |
 | Password Policy | Configurable rules a password must satisfy before it is accepted. | Applied at registration and at password reset. |
 | Security Configuration | System-wide settings that govern security behavior, such as lockout rules and session duration. | Global scope, not per user. |
 | Account Lockout | Automatic blocking of an account after repeated failed authentication attempts. | The threshold is a `Security Configuration` value. |
 | System Role | Global role that groups permissions across the whole platform. | Do **not** confuse with `Home Role`. |
-| Permission | A single authorizable action, identified by a stable code. | Granted to roles, never directly to users. |
+| Permission | A single authorizable action, identified by a stable code (e.g., `home:read`). | Granted to roles, never directly to users. |
 | RBAC | Authorization model used in this project: permissions are granted to system roles, and system roles are assigned to users. | A user's effective permissions are the union of those of their roles. |
 | Audit Log | Immutable record of a relevant action: what happened, who did it, when, from where, and in which application. | Written, never updated. |
 
@@ -48,7 +48,7 @@
 | Home | Physical dwelling that groups devices, members, thresholds, alerts, and recommendations. The main aggregation unit of consumption. | Belongs to `Home Management`, not to `Security`. |
 | Home Type | Category of dwelling used to classify a home. | Reference data. |
 | Access Code | Short code that lets a user join an existing home. | Belongs to the home, not to the user. |
-| Home Role | Role a user holds **inside a specific home**. | Scoped to one home. Do **not** confuse with `System Role`. |
+| Home Role | Role a user holds **inside a specific home**. | Scoped to one home. Do **not** confuse with `System Role`. Values: `OWNER`, `MEMBER`. |
 | Device | Physical measuring unit installed on an electrical load. It is the thing that measures. | Authenticates against the backend with its own key, not with user credentials. |
 | Appliance | The electrical load being measured: refrigerator, air conditioner, lighting circuit. It is the thing being measured. | Not modeled as an entity; classified through `Appliance Type`. |
 | Appliance Type | Category of appliance used to describe what a device monitors. | Reference data. |
@@ -61,11 +61,12 @@
 | Power Factor | Ratio between active power and apparent power. | Reported by the sensor; whether it is persisted is a data model decision. |
 | Consumption | Business reading of accumulated energy over a period, attributed to a home or a device. | Derived from measurements; not stored as an entity. |
 | Threshold | Consumption limit configured for a home, expressed in energy. | A home may define its own limits or fall back to system defaults. |
-| Consumption Level | Named band that classifies how high a consumption value is, defined by a numeric range. | A classification, not an alert. |
+| Consumption Level | Named band that classifies how high a consumption value is, defined by a numeric range. | A classification, not an alert. Four levels: LOW, MEDIUM, HIGH, CRITICAL. |
 | Alert | Notification that something requires the user's attention: an exceeded threshold, or a device that stopped reporting. | Has a lifecycle: it is raised and later resolved. |
 | Alert Severity | How serious an alert is. **Derived at runtime, never persisted.** | Computed from the consumption level, or from the connectivity rule. |
 | Recommendation | Suggested action generated from consumption behavior to help the user reduce usage. | Informative, never blocking. |
-| Notification | Conceptual umbrella covering both `Alert` and `Recommendation`. | Not a persisted entity. |
+| Notification | Conceptual umbrella covering both `Alert` and `Recommendation` delivery. | Not a persisted entity. See `Notification Delivery`. |
+| Notification Delivery | Persisted record that an outbound message (email or push) was attempted for an alert, recommendation, or password reset. | Owned by `Notification` context. Only recipient, type, subject, outcome are stored — never the message body. |
 | Message Key | Identifier stored in place of literal message text, resolved to the user's language at presentation time. | Translated text is never stored in the database. |
 
 ---
@@ -84,6 +85,8 @@
 | Domain model vs Persistence entity | The domain model holds business rules and knows nothing about the database. The persistence entity maps a table. They are deliberately separate. |
 | `Consumption Level` vs `Alert Severity` | The consumption level classifies a measurement. The severity qualifies the resulting alert and is derived from it. |
 | Entity vs Microservice | A service boundary is defined by cohesion and business responsibility, not by tables. One service owns many entities. |
+| `Measurement` vs `Consumption` | `Measurement` is the raw sensor reading (immutable). `Consumption` is the derived business value (energy over a period). |
+| `Notification` vs `Notification Delivery` | `Notification` is the conceptual event. `Notification Delivery` is the persisted log of the sending attempt. |
 
 ---
 
@@ -96,9 +99,10 @@
 | HLK-PM03 | AC/DC power supply module that powers the measuring device from mains voltage. |
 | UART | Serial protocol used between the sensor and the microcontroller. |
 | MQTT | Lightweight publish/subscribe protocol used to transport measurements from devices to the backend. |
-| MQTT Broker | Intermediary that receives published messages and routes them to subscribers, decoupling devices from the backend. |
+| MQTT Broker | Intermediary that receives published messages and routes them to subscribers, decoupling devices from the backend. Runs in the `devices` repository. |
 | Topic | Hierarchical channel name a device publishes to and a service subscribes to. |
 | API Key | Secret assigned to a device so it can authenticate when reporting measurements. Not a user credential. |
+| Device Code | Human-readable identifier for a device (e.g., `EM1A2B`), used in MQTT username and Bluetooth advertising. |
 
 ---
 
@@ -107,9 +111,9 @@
 | Term | Definition |
 |------|-----------|
 | Microservice | Independently deployed service that owns one bounded context, with its own repository, lifecycle, and CI/CD. **In this project it does not imply a dedicated database** — see `Shared Database`. |
-| Bounded Context | Boundary within which a particular domain model has consistent meaning. `Security`, `Home Management`, `Devices`, `Monitoring and Measurements`, `Alerts`, and `Recommendations` are separate contexts. |
-| Shared Database | Current decision: all services connect to a single physical database, organized logically by domain. Each domain owns its own migrations repository, which may only alter that domain's own tables. |
-| Distributed Monolith | Anti-pattern this project explicitly avoids: services that share a database also reaching into each other's tables or entities instead of talking through contracts. |
+| Bounded Context | Boundary within which a particular domain model has consistent meaning. `Security`, `Home Management`, `Devices`, `Monitoring and Measurements`, `Alerts`, `Recommendations`, and `Notification` are separate contexts. |
+| Shared Database | Current decision: all modules connect to a single physical database, organized logically by domain. Each domain owns its own tables; migrations are in a single changelog but logically separated. |
+| Distributed Monolith | Anti-pattern this project explicitly avoids: modules that share a database also reaching into each other's tables or entities instead of talking through contracts. |
 | Hexagonal Architecture | Architectural style, also called Ports and Adapters, where the domain is isolated from frameworks and all external interaction happens through explicit ports implemented by adapters. |
 | Port | Interface the application layer depends on. Inbound ports expose use cases; outbound ports declare capabilities the application needs from the outside. |
 | Adapter | Concrete implementation of a port. Inbound adapters receive external requests; outbound adapters reach persistence, security, or external clients. |
@@ -118,13 +122,14 @@
 | Persistence Entity | Class that maps a database table. Lives in the persistence adapter, never in the domain. |
 | Mapper | Component that translates between domain models and persistence entities, keeping storage details out of the domain. |
 | Value Object | Immutable type defined by its value rather than by an identity. |
-| Domain Event | A fact that occurred in the business that other services can observe. Name always in past tense. |
-| API Gateway | Single entry point to the system that routes requests to the corresponding services. |
+| Domain Event | A fact that occurred in the business that other modules can observe. Name always in past tense (e.g., `MeasurementRecorded`). |
+| API Gateway | Single entry point to the system that routes requests to the corresponding modules. (Future: when modules become microservices.) |
 | Observer | Pattern used so that a new measurement notifies subscribers without coupling ingestion to the reaction it triggers. |
 | Factory Method | Pattern used to build notifications from measurements or device status without the caller knowing the concrete type. |
 | Singleton | Pattern used to expose system-wide default values from a single instance. |
 | Idempotence | Property of an operation to produce the same result if executed multiple times. Required for measurement ingestion, since MQTT may redeliver. |
 | DTO | Data Transfer Object used at the web boundary. Domain models and persistence entities are never exposed directly. |
+| Spring Modulith | Library that enforces module boundaries at compile time and runtime, verifies allowed dependencies, and supports event publication within the modular monolith. |
 
 ---
 
@@ -162,3 +167,4 @@
 - Entity attributes, cardinalities, and business rules → `02-domain/entities-and-rules.md`
 - Data model, units, and enumeration values → `06-data/models.md`
 - Service names and ownership per context → `09-microservices/service-catalog.md`
+- Module dependency map → `09-microservices/dependency-map.md` (when created)
