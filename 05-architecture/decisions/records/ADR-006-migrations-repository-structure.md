@@ -7,9 +7,12 @@
 
 - **ID:** ADR-006
 - **Date:** 2026-09-10
-- **Status:** Accepted
+- **Status:** Superseded by ADR-009
 - **Authors:** Miguel Angel Garcia Artunduaga and Juan Esteban Cortes Parra
 
+> **Superseded on 2026-10-20 by `ADR-009-liquibase-changelogs-per-service.md`.** No separate
+> migrations repository was created. Kept unchanged below as the record of the decision taken on
+> 2026-09-10.
 ---
 
 ## Context
