@@ -35,7 +35,7 @@
 
 ### Refresh Token
 
-- Stored in the database (with bcrypt hash)
+- Stored in the database as a hash (SHA-256), never in plain text
 - Mandatory rotation on each use (one refresh token = one use)
 - Invalidated on logout and on password change
 - ALL active tokens invalidated if use of a revoked token is detected
@@ -72,9 +72,11 @@ Permission: [resource]:[action]
 
 ### Internal service-to-service communication
 
-In the current modular monolith (Spring Modulith), internal communication happens within the same process via application events and method calls across module boundaries as allowed by `@ApplicationModule`. For future microservices:
-- mTLS for service-to-service communication in production (if possible with service mesh)
-- Bearer token or internal API key for services that do not support mTLS
+As implemented (24-Oct-2026):
+- Inside `energy-monitor-backend` (modular monolith), modules communicate in process through application events and calls across module boundaries allowed by Spring Modulith.
+- Between services, internal REST under `/internal/**` is accepted only from loopback or the Docker network **and** with the shared `X-Internal-Token` header (`INTERNAL_API_TOKEN`), compared in constant time; the API gateway never forwards `/internal/**`. Mosquitto's `/internal/mqtt/auth/**` calls are restricted by network only.
+- Events between services go through RabbitMQ (credentials `RABBITMQ_*`), reachable only inside Docker.
+- There is no mTLS; traffic inside the Docker network is plain HTTP/AMQP, and HTTPS is terminated at the host's Nginx.
 
 ---
 
@@ -219,4 +221,4 @@ const SECURITY_EVENTS = [
 - Security non-functional requirements → `04-requirements/non-functional.md`
 - ADR on authentication → `05-architecture/decisions/`
 - Security event observability → `13-operations/observability.md`
-- RBAC implemented in → `09-microservices/services/XX-auth-service/`
+- RBAC implemented in → `09-microservices/services/02-security-service/` (`en-monitor-security-service`)
