@@ -1,87 +1,70 @@
 openapi: 3.0.3
 info:
-  title: API Gateway
+  title: API Gateway (en-monitor-api-gateway)
   version: 1.0.0
   description: |
-    Punto único de entrada al sistema. El gateway enruta las peticiones a los
-    microservicios correspondientes según el path.
+    Single entry point of the EnergyMonitor API (Spring Cloud Gateway Server Web MVC, port 8080).
+    In production since 24-Oct-2026. The gateway has no business endpoints of its own: it
+    forwards each request to the service that owns the path, unchanged.
 
-    ## Autenticación
-    La mayoría de los endpoints requieren un JWT válido:
-    ```
-    Authorization: Bearer <access_token>
-    ```
-    El token se obtiene en `POST /api/v1/auth/login` (ver `auth-service.yaml`).
+    ## Routes (most specific first)
+    | Paths | Service |
+    |---|---|
+    | `/api/v1/auth/**`, `/api/v1/admin/users/**`, `/api/v1/admin/roles/**`, `/api/v1/support/**` | en-monitor-security-service (:8082) |
+    | `/api/v1/homes/{homeId}/devices/**`, `/api/v1/appliance-types/**` | en-monitor-device-service (:8084) |
+    | `/api/v1/measurements/**`, `/api/v1/consumption-levels/**`, `/api/v1/homes/{homeId}/consumption/**` | en-monitor-measurement-service (:8085) |
+    | any other `/api/v1/**` | energy-monitor-backend (:8083) |
+    | `/internal/**` | never forwarded (401 without a token, 403 with one) |
+    | anything else | 404 |
 
-    ## Headers internos (solo entre servicios)
-    El gateway agrega estos headers antes de reenviar la petición al upstream:
-    - `X-User-Id`: UUID del usuario autenticado
-    - `X-User-Role`: Rol del usuario (ADMIN, USER, VIEWER)
-    - `X-Correlation-Id`: ID de traza para correlacionar logs
+    ## Authentication
+    Every route requires a valid access token (RS256, issuer, expiry) except the public account
+    endpoints of the security service (register, login, google, refresh, password forgot and
+    reset, email verify and resend) and `GET /api/v1/support/contacts`. The token is sent as
+    `Authorization: Bearer <access_token>` (mobile app) or, for the web app, in the HttpOnly
+    cookie `em_access` together with `X-Requested-With: XMLHttpRequest`; the gateway then forwards
+    it as a bearer token. The gateway adds no user headers: each service validates the token
+    again and decides the permissions.
+
+    ## Answers produced by the gateway itself
+    401 (missing or invalid token), 404 (no route), 429 (more than 20 public account POSTs per
+    client address and path per minute, with `Retry-After`), 503 (the service refused the
+    connection), 504 (no answer within 30 s). All use the `ApiError` shape below.
+
+    The full contract of each service is published by the service itself (springdoc, Swagger UI
+    at `/swagger-ui.html` on its own port in development mode).
 
 servers:
+  - url: https://energy-monitor.tech
+    description: Production (Nginx → web container → gateway)
+  - url: http://localhost
+    description: Full local Docker stack (web container's nginx forwards /api/ to the gateway)
   - url: http://localhost:8080
-    description: Local development
-  - url: https://api.dev.{domain}
-    description: Development
-    variables:
-      domain:
-        default: example.com
-  - url: https://api.{domain}
-    description: Production
-    variables:
-      domain:
-        default: example.com
+    description: Development mode (gateway started with ./mvnw spring-boot:run)
 
-tags:
-  - name: Health
-    description: Estado del gateway y sus upstreams
-
-paths:
-  /health:
-    get:
-      summary: Health check del gateway
-      description: |
-        Verifica que el gateway esté funcionando y que todos los servicios upstream
-        estén respondiendo. No requiere autenticación.
-      tags:
-        - Health
-      security: []
-      responses:
-        '200':
-          description: Gateway y upstreams saludables
-          content:
-            application/json:
-              schema:
-                type: object
-                required: [status, timestamp]
-                properties:
-                  status:
-                    type: string
-                    enum: [ok, degraded]
-                  timestamp:
-                    type: string
-                    format: date-time
-                  upstreams:
-                    type: object
-                    description: Estado de cada microservicio
-                    additionalProperties:
-                      type: string
-                      enum: [ok, degraded, down]
-              example:
-                status: ok
-                timestamp: '2024-01-15T10:30:00Z'
-                upstreams:
-                  auth-service: ok
-                  nombre-servicio: ok
-        '503':
-          description: El gateway está iniciando o un upstream crítico está caído
-          content:
-            application/json:
-              schema:
-                $ref: './auth-service.yaml#/components/schemas/ErrorResponse'
+paths: {}
 
 components:
+  schemas:
+    ApiError:
+      type: object
+      description: Error body shared by the gateway and the services.
+      required: [timestamp, status, error, message, path]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+          example: 503
+        error:
+          type: string
+          example: Service Unavailable
+        message:
+          type: string
+        path:
+          type: string
+          example: /api/v1/homes
   securitySchemes:
     bearerAuth:
       $ref: './_shared.yaml#/components/securitySchemes/bearerAuth'
