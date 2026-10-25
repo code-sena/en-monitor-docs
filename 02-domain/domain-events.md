@@ -40,9 +40,9 @@ Device → [PublishReading] → Monitoring and Measurements → [MeasurementReco
 | **Bounded Context** | Monitoring and Measurements |
 | **Aggregate** | `Measurement` |
 | **Trigger** | A device publishes a reading over MQTT and it is accepted and persisted |
-| **Consumers** | Alerts (threshold evaluation), Recommendations (pattern update) |
-| **Channel (topic)** | Kafka topic `monitoring.measurement-recorded` |
-| **Partition key** | `deviceId` — preserves per-device ordering; consumers that need per-home ordering must not assume it across devices |
+| **Consumers** | Alerts (threshold, limit and "device linked" alerts). Recommendations do not consume it: they read hourly energy from the measurement service's internal API |
+| **Channel (topic)** | RabbitMQ `energy-monitor.measurement` / `measurement.recorded` (outbox `measurement_outbox`), republished in memory as `MeasurementRecorded` by the backend's `measurement` proxy |
+| **Ordering** | Per producer: the outbox relay publishes oldest first and stops at the first failure (no partitions) |
 | **Schema version** | `v1` |
 | **Delivery guarantee** | At-least-once |
 
@@ -96,8 +96,8 @@ Device → [PublishReading] → Monitoring and Measurements → [MeasurementReco
 | **Aggregate** | `Device` (recorded through `DeviceStatusLog`) |
 | **Trigger** | A device stops publishing measurements for longer than the configured timeout |
 | **Consumers** | Alerts (connectivity evaluation) |
-| **Channel (topic)** | Kafka topic `devices.device-connectivity-lost` |
-| **Partition key** | `deviceId` |
+| **Channel (topic)** | RabbitMQ `energy-monitor.device` / `device.connectivity-lost` (outbox `device_outbox`), republished in memory by the backend's `device` proxy |
+| **Ordering** | Per producer: the outbox relay publishes oldest first and stops at the first failure (no partitions) |
 | **Schema version** | `v1` |
 | **Delivery guarantee** | At-least-once |
 
@@ -151,8 +151,8 @@ Device → [PublishReading] → Monitoring and Measurements → [MeasurementReco
 | **Aggregate** | `Device` (recorded through `DeviceStatusLog`) |
 | **Trigger** | A device that was offline resumes publishing measurements within the timeout |
 | **Consumers** | Alerts (may auto-resolve a `CONNECTIVITY` alert) |
-| **Channel (topic)** | Kafka topic `devices.device-connectivity-restored` |
-| **Partition key** | `deviceId` |
+| **Channel (topic)** | RabbitMQ `energy-monitor.device` / `device.connectivity-restored` (outbox `device_outbox`), republished in memory by the backend's `device` proxy |
+| **Ordering** | Per producer: the outbox relay publishes oldest first and stops at the first failure (no partitions) |
 | **Schema version** | `v1` |
 | **Delivery guarantee** | At-least-once |
 
@@ -199,9 +199,9 @@ Device → [PublishReading] → Monitoring and Measurements → [MeasurementReco
 | **Bounded Context** | Devices |
 | **Aggregate** | `Device` |
 | **Trigger** | A device is successfully linked to a home via the access code flow |
-| **Consumers** | Home Management (updates `DeviceHome` relationship), Alerts (device now reports to home) |
-| **Channel (topic)** | Kafka topic `devices.device-linked` |
-| **Partition key** | `deviceId` |
+| **Consumers** | `energy-monitor-backend` (drops its device cache), measurement service (drops its device cache). `DeviceHome` is owned by the device service itself |
+| **Channel (topic)** | RabbitMQ `energy-monitor.device` / `device.linked` (outbox `device_outbox`) |
+| **Ordering** | Per producer: the outbox relay publishes oldest first and stops at the first failure (no partitions) |
 | **Schema version** | `v1` |
 | **Delivery guarantee** | At-least-once |
 
@@ -249,9 +249,9 @@ Device → [PublishReading] → Monitoring and Measurements → [MeasurementReco
 | **Bounded Context** | Devices / Home Management |
 | **Aggregate** | `Device` (aggregate root), `UserHome` (relationship) |
 | **Trigger** | A device is unlinked from a home (either by the owner or by account deletion) |
-| **Consumers** | Home Management (removes `DeviceHome` relationship), Alerts (device no longer reports to home) |
-| **Channel (topic)** | Kafka topic `devices.device-unlinked` |
-| **Partition key** | `deviceId` |
+| **Consumers** | `energy-monitor-backend` (drops its device cache), measurement service (drops its device cache) |
+| **Channel (topic)** | RabbitMQ `energy-monitor.device` / `device.unlinked` (outbox `device_outbox`) |
+| **Ordering** | Per producer: the outbox relay publishes oldest first and stops at the first failure (no partitions) |
 | **Schema version** | `v1` |
 | **Delivery guarantee** | At-least-once |
 
@@ -299,8 +299,8 @@ Device → [PublishReading] → Monitoring and Measurements → [MeasurementReco
 | **Aggregate** | `Device` |
 | **Trigger** | A new device is registered in the system (creates the `Device` entity) |
 | **Consumers** | None directly — this is an internal state change event; other services may query the device registry |
-| **Channel (topic)** | Kafka topic `devices.device-registered` (optional; may be internal-only) |
-| **Partition key** | `deviceId` |
+| **Channel (topic)** | Not published outside the device service (no RabbitMQ routing key exists for it) |
+| **Ordering** | Per producer: the outbox relay publishes oldest first and stops at the first failure (no partitions) |
 | **Schema version** | `v1` |
 | **Delivery guarantee** | At-least-once |
 
@@ -346,8 +346,8 @@ Device → [PublishReading] → Monitoring and Measurements → [MeasurementReco
 | **Aggregate** | `Alert` |
 | **Trigger** | An alert transitions from `PENDING` to `ACTIVE` state |
 | **Consumers** | Notification (delivers the alert via email/push) |
-| **Channel (topic)** | Kafka topic `alerts.alert-raised` |
-| **Partition key** | `idAlert` |
+| **Channel (topic)** | In-memory Spring event inside `energy-monitor-backend` |
+| **Ordering** | Per producer: the outbox relay publishes oldest first and stops at the first failure (no partitions) |
 | **Schema version** | `v1` |
 | **Delivery guarantee** | At-least-once |
 
@@ -399,8 +399,8 @@ Device → [PublishReading] → Monitoring and Measurements → [MeasurementReco
 | **Aggregate** | `Recommendation` |
 | **Trigger** | A new recommendation is generated from consumption pattern analysis |
 | **Consumers** | Notification (delivers the recommendation via email/push) |
-| **Channel (topic)** | Kafka topic `recommendations.recommendation-created` |
-| **Partition key** | `idRecommendation` |
+| **Channel (topic)** | In-memory Spring event inside `energy-monitor-backend` |
+| **Ordering** | Per producer: the outbox relay publishes oldest first and stops at the first failure (no partitions) |
 | **Schema version** | `v1` |
 | **Delivery guarantee** | At-least-once |
 
@@ -449,9 +449,9 @@ Device → [PublishReading] → Monitoring and Measurements → [MeasurementReco
 | **Bounded Context** | Security |
 | **Aggregate** | `User` |
 | **Trigger** | A user account is soft-deleted (lifecycle: `ACTIVE` → `DELETED`) |
-| **Consumers** | Home (`AccountDeletedListener`), Notification (may notify related parties) |
-| **Channel (topic)** | Kafka topic `security.account-deleted` |
-| **Partition key** | `idUser` |
+| **Consumers** | Home Management in `energy-monitor-backend`: drops the memberships and the homes the account alone owned |
+| **Channel (topic)** | RabbitMQ `energy-monitor.security` / `account.deleted` (outbox `security_outbox`) |
+| **Ordering** | Per producer: the outbox relay publishes oldest first and stops at the first failure (no partitions) |
 | **Schema version** | `v1` |
 | **Delivery guarantee** | At-least-once |
 
@@ -513,24 +513,29 @@ action — `metadata.userId` is expected to be absent from every event currently
 in the envelope for future events that a user does initiate (for example, a user manually
 resolving an alert).
 
-**Partitioning (Kafka-specific):** the envelope fields above are broker-agnostic, but Kafka only
-guarantees ordering *within* a partition, not across a topic. Every event in this catalog is
-produced with a **partition key** — see the "Partition key" field on each event above — so that
-events about the same `deviceId` are always processed in order by the same consumer instance.
-The partition key is not part of the JSON payload; it is passed to the producer separately (the
-Kafka record key), per the client library in use (Spring Kafka on this project's backend).
+**Ordering:** every producer writes its events to its own outbox table in the same transaction
+as the change, and a relay publishes them to RabbitMQ oldest first, stopping at the first failure,
+so order is kept per producer (`ADR-008`). The production payloads carry the message id (the
+outbox `id_message`) and the business fields; the `metadata.*` envelope fields above are the
+target format, not yet used on RabbitMQ.
 
-**Transport:** Domain events in this catalog are **Spring Framework events published in memory**
-within the modular monolith. They are not sent over Apache Kafka or any external broker. The
-`MeasurementRecorded` and `DeviceConnectivityLost` events are raised by the domain layer and
-consumed by other modules within the same Spring application context. This design choice
-reflects the modular monolith architecture (Spring Modulith) where in-process event delivery
-is sufficient and avoids the complexity of a distributed event bus for the current deployment.
+**Transport (24-Oct-2026):**
 
-MQTT is used only for device-to-backend telemetry (device → backend), never for service-to-service
-events. The transport mechanism is documented in `05-architecture/decisions/records/ADR-002-domain-event-transport.md`,
-which previously evaluated Kafka as an alternative but the implementation chose in-memory Spring
-events for the modular monolith.
+- **Between services** (Security, Devices and Monitoring/Measurements are microservices):
+  RabbitMQ 4.1 topic exchanges `energy-monitor.security`, `energy-monitor.home`,
+  `energy-monitor.device` and `energy-monitor.measurement`, each fed by a transactional outbox
+  (`05-architecture/decisions/records/ADR-008-rabbitmq-transactional-outbox.md`, which
+  supersedes the Kafka decision of `ADR-002`). Besides the events in this catalog, the security
+  service publishes `account.registered`, `account.administered`, `mail.email-verification` and
+  `mail.password-reset`, and the backend publishes `home.deleted`.
+- **Inside `energy-monitor-backend`** (Home Management, Alerts, Recommendations, Notification):
+  Spring application events in memory — `AlertRaised`, `RecommendationCreated`,
+  `HomeOwnershipTransferred`, plus `MeasurementRecorded` and `DeviceConnectivityLost/Restored`,
+  which the proxy packages republish when the RabbitMQ message arrives. `ModularityTests` checks
+  the module boundaries.
+
+MQTT is used only for device traffic (telemetry and status from the modules, commands to them),
+never for service-to-service events.
 
 ---
 
@@ -608,17 +613,18 @@ Step 5: Stop publishing EventV1
 
 ## Event summary table
 
-| Event | Origin context | Topic | Consumers | Version |
+| Event | Origin context | Channel (24-Oct-2026) | Consumers | Version |
 |-------|-----------------|-------|-----------|---------|
-| `MeasurementRecorded` | Monitoring and Measurements | `monitoring.measurement-recorded` | Alerts, Recommendations | v1 |
-| `DeviceConnectivityLost` | Devices | `devices.device-connectivity-lost` | Alerts | v1 |
-| `DeviceConnectivityRestored` | Devices | `devices.device-connectivity-restored` | Alerts (may auto-resolve) | v1 |
-| `DeviceLinked` | Devices | `devices.device-linked` | Home Management, Alerts | v1 |
-| `DeviceUnlinked` | Devices / Home Management | `devices.device-unlinked` | Home Management, Alerts | v1 |
-| `DeviceRegistered` | Devices | (internal registry) | None (internal) | v1 |
-| `AlertRaised` | Alerts | `alerts.alert-raised` | Notification | v1 |
-| `RecommendationCreated` | Recommendations | `recommendations.recommendation-created` | Notification | v1 |
-| `AccountDeleted` | Security | `security.account-deleted` | Home, Notification | v1 |
+| `MeasurementRecorded` | Monitoring and Measurements | RabbitMQ `measurement.recorded` → in memory in the backend | Alerts | v1 |
+| `DeviceConnectivityLost` | Devices | RabbitMQ `device.connectivity-lost` → in memory in the backend | Alerts | v1 |
+| `DeviceConnectivityRestored` | Devices | RabbitMQ `device.connectivity-restored` → in memory in the backend | Alerts | v1 |
+| `DeviceLinked` | Devices | RabbitMQ `device.linked` | Backend (device cache), measurement service (cache) | v1 |
+| `DeviceUnlinked` | Devices | RabbitMQ `device.unlinked` | Backend (device cache), measurement service (cache) | v1 |
+| `DeviceRegistered` | Devices | Not published outside the device service | None | v1 |
+| `AlertRaised` | Alerts | In memory (backend) | Notification | v1 |
+| `RecommendationCreated` | Recommendations | In memory (backend) | Notification | v1 |
+| `AccountDeleted` | Security | RabbitMQ `account.deleted` | Home Management | v1 |
+| `home.deleted` | Home Management | RabbitMQ `energy-monitor.home` (outbox `home_outbox`) | Devices: unlinks the home's modules and sends them `unlink` | — |
 
 ---
 
@@ -629,14 +635,15 @@ A **Policy** describes what happens automatically when an event arrives: "whenev
 | Trigger event | Policy | Emitted command | Service |
 |----------------|--------|-------------------|---------|
 | `MeasurementRecorded` | Whenever the classified consumption level is `HIGH` or `CRITICAL`, raise an alert | `RaiseThresholdAlert` | Alerts |
-| `MeasurementRecorded` | Whenever the reading meaningfully changes the home's consumption pattern, generate a suggestion | `GenerateRecommendation` | Recommendations |
+| — | Recommendations are generated from the hourly energy read from the measurement service, not from this event | `GenerateRecommendation` | Recommendations |
 | `DeviceConnectivityLost` | Whenever a device stops reporting past the timeout, raise an alert | `RaiseConnectivityAlert` | Alerts |
 | `DeviceConnectivityRestored` | Whenever a device resumes reporting, may auto-resolve a `CONNECTIVITY` alert | — | Alerts |
-| `DeviceLinked` | Whenever a device is linked to a home, record the `DeviceHome` relationship | — | Home Management |
-| `DeviceUnlinked` | Whenever a device is unlinked from a home, remove the `DeviceHome` relationship | — | Home Management |
+| `DeviceLinked` | Whenever a device is linked to a home, drop the cached copy of the device | — | Backend, measurement service |
+| `DeviceUnlinked` | Whenever a device is unlinked from a home, drop the cached copy of the device | — | Backend, measurement service |
 | `AlertRaised` | Whenever an alert becomes active, deliver it via configured channels | — | Notification |
 | `RecommendationCreated` | Whenever a recommendation is generated, deliver it via configured channels | — | Notification |
-| `AccountDeleted` | Whenever an account is soft-deleted, cascade the deletion to related entities | — | Home, Notification |
+| `AccountDeleted` | Whenever an account is soft-deleted, drop its memberships and the homes it alone owned | — | Home Management |
+| `home.deleted` | Whenever a home is deleted, unlink its modules, revoke their API keys and send them `unlink` | — | Devices |
 
 ---
 
@@ -647,10 +654,11 @@ A **Policy** describes what happens automatically when an event arrives: "whenev
 The broker guarantees the event is delivered **at least once** but it may be delivered more than
 once (in case of retries). Consumers must be **idempotent**.
 
-With Kafka, "at-least-once" comes from committing the consumer group's offset only *after* the
-event is fully processed (not before). If the consumer crashes between processing and committing,
-the same message is redelivered on restart — the `processedEventRepository.exists(eventId)` check
-below is what makes that redelivery safe, not the broker itself.
+In this project "at-least-once" comes from the outbox relay: a row is marked published only after
+RabbitMQ confirms it and a queue took it, so a crash in between publishes it again. Every message
+carries its id, and every consumer tolerates a second delivery (for example, a repeated
+`home.deleted` finds no module left to unlink). The snippet below is the generic form of an
+idempotent consumer.
 
 ```java
 // Idempotent consumer — stores the processed eventId before acting on the event
@@ -669,15 +677,15 @@ public void handleMeasurementRecorded(MeasurementRecordedEvent event) {
 
 When an event fails after N retries, it goes to the DLQ.
 
-In Kafka, the DLQ is itself a topic, following the `<original-topic>.DLQ` naming pattern (e.g.
-`monitoring.measurement-recorded.DLQ`), not a separate queue technology. A message published to
-it keeps its original headers plus the failure reason, so it can be replayed once fixed.
+In RabbitMQ every consumer queue is durable and has its own dead-letter queue (`<queue>.dlq`, on
+a `<service>.dlx` exchange), for example `device-service.device.home-deleted.dlq` or
+`energy-monitor-backend.measurement.recorded.dlq`.
 
-| Configuration | Recommended value |
+| Configuration | Value in production |
 |----------------|--------------------|
-| Retries before DLQ | 3-5 |
-| Backoff | Exponential (1s → 2s → 4s → 8s) |
-| DLQ retention | 7 days |
-| Alert | When DLQ has > 0 messages |
+| Attempts before the DLQ | 3 |
+| Backoff | 1 s, 2 s, 4 s (device and measurement services) |
+| DLQ retention | Not documented in the service repositories |
+| Alert | None automated; checked in the RabbitMQ console |
 
 > See DLQ runbook in `09-microservices/services/XX-service/runbook.md`
