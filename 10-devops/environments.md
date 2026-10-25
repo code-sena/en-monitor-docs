@@ -2,7 +2,8 @@
 
 > Defines the system's environments, their purposes, access, and key configurations.
 > **Rule:** If you need to access production directly, something is wrong in the process.
-> Most problems should be detected in staging.
+>
+> State at 24-Oct-2026. Source: README and `deploy/deploy.sh` of `energy-monitor-infra`.
 
 ---
 
@@ -10,152 +11,105 @@
 
 | Environment | Purpose | Update | Access | Data |
 |-------------|---------|--------|--------|------|
-| **local** | Development on the dev's machine | Manual | Individual dev | Synthetic / seed |
-| **dev** | Continuous integration | Automatic (each PR merge to `develop`) | Entire team | Synthetic |
-| **staging** | Pre-production, QA, demos | Automatic (each merge to `main`) | Team + PO | Anonymized from prod |
-| **production** | Real users | Manual (approval required) | Tech Lead + DevOps only | Real |
+| **local** | Development on the developer's machine: full Docker stack or development mode (`10-devops/local-setup.md`) | Manual | Each developer | Own test accounts and homes |
+| **dev** (branch) | Integration: every pull request targets `dev`; CI runs the tests on every PR and push | Automatic CI, no deployment | Team | — (no `dev` server) |
+| **production** | `https://energy-monitor.tech` (MQTT: `mqtt.energy-monitor.tech:8883`), Ubuntu VPS | From `main`, after CI and the approval of the GitHub `production` environment | Team | Real |
+
+There is no separate staging environment.
 
 ---
 
 ## Environment variables per environment
 
-> Specific variables go in the environment's secrets system (Vault, AWS Secrets, K8s Secrets).
-> Local values go in `.env.example` (without real data).
+| Environment | Where the values live |
+|---|---|
+| Full local stack | `infra/.env` (copied from `.env.example`) |
+| Development mode | `infra/.env` plus each service's own `.env` and `application-local.yaml` |
+| Production | `infra/.env.prod` on the server (copied from `.env.prod.example`, `chmod 600`) |
+| GitHub Actions | Secrets of the `production` environment in each repository: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS` |
 
-### Naming convention
-
-```
-APP_[SERVICE]_[VARIABLE]
-
-Examples:
-  APP_AUTH_JWT_SECRET
-  APP_ORDERS_DATABASE_URL
-  APP_NOTIFICATIONS_SMTP_HOST
-```
-
-### Variables per environment (example values — real ones in the vault)
-
-| Variable | Local | Dev | Staging | Production |
-|----------|-------|-----|---------|------------|
-| `DATABASE_URL` | `postgresql://dev:dev@localhost/dev_db` | Vault | Vault | Vault |
-| `REDIS_URL` | `redis://localhost:6379` | Vault | Vault | Vault |
-| `JWT_SECRET` | `dev-secret-only-local` | Vault | Vault | Vault |
-| `LOG_LEVEL` | `debug` | `info` | `info` | `warn` |
-| `NODE_ENV` | `development` | `development` | `staging` | `production` |
-| `CORS_ORIGIN` | `http://localhost:3000` | `https://dev.[domain]` | `https://staging.[domain]` | `https://[domain]` |
+None of these files is versioned. The variables and how to obtain each value are in
+`10-devops/local-setup.md`. Production differs from local mainly in: `DEVICE_MQTT_PUBLIC_HOST`
+(`mqtt.<domain>`), `https://<domain>` as CORS origin and public URL, `Secure` session cookies,
+and the JWT key pair in `JWT_KEYS_DIR`.
 
 ---
 
 ## CI/CD Pipeline
 
+Every repository (gateway, security, device, measurement, backend, web, infra) has
+`.github/workflows/ci-cd.yml`:
+
 ```
 Developer
-  │
-  │ git push feature/HU-XXX
-  │
+  │ push feat/... → pull request to dev
   ▼
-┌─────────────────────────────────────────────────────────┐
-│  PR PIPELINE (runs on every push to a branch)           │
-│  ─────────────────────────────────────────────          │
-│  1. Lint + Format check      (< 2 min)                  │
-│  2. Unit Tests               (< 5 min)                  │
-│  3. Build                    (< 3 min)                  │
-│  ─────────────────────────────────────────────          │
-│  If it fails: blocks the PR merge                       │
-└─────────────────────────────────────────────────────────┘
-  │
-  │ PR approved and merged to `develop`
-  │
+┌──────────────────────────────────────────────────────────────────────┐
+│ CI (every pull request and push to dev and main)                     │
+│  - Java services: ./mvnw test (against a MySQL 8.4 service of the    │
+│    runner where needed) and docker build                             │
+│  - Web: vitest + npm run build                                       │
+│  - Infra: docker compose config of the three modes, shellcheck,      │
+│    nginx -t of the template                                          │
+└──────────────────────────────────────────────────────────────────────┘
+  │ pull request dev → main
   ▼
-┌─────────────────────────────────────────────────────────┐
-│  DEVELOP PIPELINE (deploy to dev)                       │
-│  ─────────────────────────────────────────────          │
-│  1. Lint + Build + Unit Tests   (< 10 min)              │
-│  2. Integration Tests           (< 15 min)              │
-│  3. Build Docker image          (< 5 min)               │
-│  4. Deploy to dev               (< 5 min)               │
-│  5. Smoke tests in dev          (< 3 min)               │
-└─────────────────────────────────────────────────────────┘
-  │
-  │ Release: merge develop → main
-  │
-  ▼
-┌─────────────────────────────────────────────────────────┐
-│  MAIN PIPELINE (deploy to staging)                      │
-│  ─────────────────────────────────────────────          │
-│  1. All tests                   (< 20 min)              │
-│  2. Contract Tests              (< 5 min)               │
-│  3. Build + push image with tag (< 5 min)               │
-│  4. Deploy to staging           (< 5 min)               │
-│  5. Smoke tests in staging      (< 5 min)               │
-│  6. Performance tests (k6)      (< 15 min)              │
-│  7. Notify PO (ready for QA)                            │
-└─────────────────────────────────────────────────────────┘
-  │
-  │ Manual approval by Tech Lead
-  │
-  ▼
-┌─────────────────────────────────────────────────────────┐
-│  DEPLOY TO PRODUCTION                                   │
-│  ─────────────────────────────────────────────          │
-│  1. Canary deploy (10% of traffic)                      │
-│  2. Monitor metrics for 15 min                          │
-│  3. If OK: 100% of traffic                              │
-│  4. If KO: automatic rollback                           │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────────────┐
+│ CD (push to main or "Run workflow"), after the tests and the         │
+│ approval of the production environment                              │
+│  SSH to the VPS with a key restricted to                             │
+│  infra/deploy/deploy.sh backend|security|device|measurement|         │
+│                         gateway|frontend|infra                       │
+└──────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Production deploy strategy
 
-### Available options
+**Adopted strategy:** recreate one component at a time, with an automatic revert.
+`deploy.sh <component>`:
 
-| Strategy | Description | Risk | Rollback |
-|----------|-------------|------|---------|
-| **Canary** | 10% → 50% → 100% with validation at each step | Low | Automatic |
-| **Blue-Green** | Instant switch between two versions | Medium | Immediate |
-| **Rolling** | Replaces instances one by one | Low | Slow |
-| **Recreate** | Takes everything down and starts the new version | High | Manual |
-
-**Adopted strategy:** [Canary / Blue-Green / Rolling]
+1. Takes a lock, so only one deployment runs at a time.
+2. Backs up MySQL (`deploy/backup-mysql.sh`).
+3. Pulls `main` in that component's repository.
+4. Rebuilds and recreates only that container (`docker compose ... up -d --build --no-deps`;
+   `infra` recreates what changed, including Mosquitto).
+5. Waits up to 300 s until the five Java services are `healthy`, the web answers 200 and
+   `/api/v1/homes` answers 401 through the gateway.
+6. If that fails, checks out the previous commit, rebuilds it and exits with an error (the job
+   turns red).
 
 ### Production deploy checklist
 
-- [ ] The release PR was reviewed and approved
-- [ ] Staging tests passed (including performance)
-- [ ] The PO approved the HUs included in this release
-- [ ] The Tech Lead approved the deploy
-- [ ] Someone is available to monitor the first 30 min post-deploy
-- [ ] If there are database changes: migration ran before the code deploy
-- [ ] The rollback runbook is available: `[link to runbook]`
+- [ ] The pull request `dev` → `main` was reviewed and CI is green
+- [ ] The `production` environment approval was given
+- [ ] If there are database changes: the new changesets are forward-only and have a `rollback`
+      block (`06-data/migration-strategy.md`)
+- [ ] When a component depends on another's new version (for example a new MQTT user), the
+      dependency is deployed first (the infra README lists the order used for each extraction)
+- [ ] Someone checks the service after the deploy (`09-microservices/services/*/runbook.md`)
 
 ### Rollback
 
-```bash
-# Rollback Kubernetes to the previous version
-kubectl rollout undo deployment/[service-name] -n [namespace]
-
-# Verify the rollback
-kubectl rollout status deployment/[service-name] -n [namespace]
-
-# If there is an incompatible DB migration (EMERGENCY — consult Tech Lead first)
-npm run db:migrate:revert
-```
+- Automatic: `deploy.sh` reverts to the previous commit when its health checks fail.
+- On purpose: revert the change in the repository and let CD redeploy `main`. A code rollback
+  does not revert an applied Liquibase changeset; the MySQL backup taken by `deploy.sh` before
+  each deployment is the fallback for data.
 
 ---
 
 ## Deploy log
 
-| Date | Service | Version | Environment | Deployed by | Issues |
-|------|---------|---------|-------------|-------------|--------|
-| [date] | [service] | v[X.Y.Z] | production | [name] | None |
+The versions in production are listed, with their commit, in `09-microservices/service-catalog.md`
+("Version in production"). The GitHub Actions run history of each repository is the detailed log.
 
 ---
 
 ## Correlations
 
 - Local setup → `10-devops/local-setup.md`
+- Deployment architecture → `05-architecture/deployment.md`
 - Post-deploy observability → `13-operations/observability.md`
-- Runbook per service → `09-microservices/services/XX/runbook.md`
+- Runbook per service → `09-microservices/services/*/runbook.md`
 - Branch policy → `00-governance/git-conventions.md`
