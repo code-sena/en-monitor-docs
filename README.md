@@ -3,10 +3,34 @@
 > Generic documentation template · v1.0 · MIT License
 > Authored by Jesus Ariel Gonzalez Bonilla - freely licensed (MIT) for anyone.
 
-This repository is a **documentation scaffold** for any microservices project.
-It contains no project-specific information. Its purpose is to teach how to document
-a software system professionally — showing what goes in each section, why it matters,
-and how every document relates to the others.
+This repository started as a **documentation scaffold** for any microservices project, and is
+now filled in with the documentation of **EnergyMonitor** (SENA, ADSO program, group 3145556).
+Its purpose is still to show how to document a software system professionally — what goes in
+each section, why it matters, and how every document relates to the others.
+
+---
+
+## EnergyMonitor at a glance (24-Oct-2026)
+
+EnergyMonitor measures the electricity each appliance in a home consumes (ESP32 + PZEM-004T V3
+modules over MQTT) and turns it into history, alerts and recommendations on a web app and an
+Android app. It is in production at `https://energy-monitor.tech`.
+
+| Component | Port | What it is | Status |
+|---|---|---|---|
+| `en-monitor-api-gateway` | 8080 | Single API entry point (Spring Cloud Gateway Server Web MVC) | In production |
+| `en-monitor-security-service` | 8082 | Security context: accounts, login, JWT, sessions, RBAC | In production |
+| `en-monitor-device-service` | 8084 | Devices context: linking, credentials, MQTT auth/ACL, commands, connectivity | In production |
+| `en-monitor-measurement-service` | 8085 | Monitoring and Measurements context: readings, history, statistics, consumption | In production |
+| `energy-monitor-backend` | 8083 | Modular monolith (Spring Modulith) with Home Management, Alerts, Recommendations and Notification | In production; migration of these four contexts to microservices in progress |
+
+Services talk over internal REST (`/internal/**`, `X-Internal-Token`) and RabbitMQ topic
+exchanges with a transactional outbox per service; they share one MySQL 8.4 schema in which each
+service owns its tables. Start reading at
+[`05-architecture/overview.md`](./05-architecture/overview.md) and
+[`09-microservices/service-catalog.md`](./09-microservices/service-catalog.md).
+
+Team: Juan Esteban Cortés Parra and Miguel Ángel García Artunduaga.
 
 ---
 
