@@ -1,34 +1,30 @@
+# ⚠️ ARCHIVED — 2026-10-24
+# Replaced by: 07-api/contracts/openapi/security-service.yaml
+# Reason: early draft of an "auth-service" written before the service existed; the security
+# service (en-monitor-security-service) is in production and its contract is generated from its
+# springdoc output.
 openapi: 3.0.3
 info:
-  title: Auth Service API
+  title: Security Service API (en-monitor-security-service) — DRAFT
   version: 1.0.0
   description: |
-    Servicio de autenticación: registro, login, renovación de tokens y gestión de sesiones.
-
-    ## Flujo de autenticación
-    1. `POST /auth/register` — crear cuenta
-    2. `POST /auth/login` — obtener access_token + refresh_token
-    3. Usar `access_token` en el header `Authorization: Bearer` para todos los demás endpoints
-    4. Cuando el access_token expire (1h): `POST /auth/refresh` con el refresh_token
-    5. Para cerrar sesión: `POST /auth/logout`
-
-    ## Tokens
-    - **access_token**: JWT RS256, expira en 1 hora. Incluye userId, email, roles, permissions.
-    - **refresh_token**: Opaque token (UUID), expira en 7 días. Solo válido una vez (rotación).
+    > DRAFT written before the service existed; NOT aligned with the code. The source of truth
+    > for the contract is the service's own springdoc output (Swagger UI at
+    > `http://localhost:8082/swagger-ui.html` in development mode). Known differences, as of
+    > 24-Oct-2026: there is no `/health` (it is `/actuator/health`) and no `/jwks` endpoint (the
+    > public key is distributed as `public.pem`); the access token lives 15 minutes, not 1 hour,
+    > and carries no roles or permissions; the web app receives its tokens in HttpOnly cookies;
+    > several endpoints are missing below (Google sign-in, e-mail verification, password
+    > recovery and change, account, profile, account deletion, permissions, `/api/v1/admin/**`,
+    > `GET /api/v1/support/contacts`). See `09-microservices/services/02-security-service/README.md`.
 
 servers:
-  - url: http://localhost:8081
-    description: Local development
-  - url: https://api.dev.{domain}/api/v1/auth
-    description: Development
-    variables:
-      domain:
-        default: example.com
-  - url: https://api.{domain}/api/v1/auth
-    description: Production
-    variables:
-      domain:
-        default: example.com
+  - url: https://energy-monitor.tech/api/v1/auth
+    description: Production (through the API gateway)
+  - url: http://localhost:8080/api/v1/auth
+    description: Development mode, through the gateway
+  - url: http://localhost:8082/api/v1/auth
+    description: Development mode, the service directly
 
 security: []  # La mayoría de estos endpoints son públicos
 

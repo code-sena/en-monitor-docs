@@ -18,7 +18,7 @@
 
 ```
 1. Pick a User Story from the sprint (status: Ready)
-2. Create your branch from develop
+2. Create your branch from dev
 3. Implement using TDD (Red → Green → Refactor)
 4. Update affected documentation
 5. Open a Pull Request using the template
@@ -45,7 +45,7 @@ docs/adr-002-database-engine
 
 ## Pull Request process
 
-1. **Open the PR** against `develop` (never directly against `main`)
+1. **Open the PR** against `dev` (never directly against `main`)
 2. **Fill in the PR template** completely (`/.github/pull_request_template.md`)
 3. **Assign reviewers:** at least 1 (preferably the Tech Lead or service owner)
 4. **CI must be green** — do not request review with a failing pipeline

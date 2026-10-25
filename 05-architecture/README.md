@@ -13,6 +13,32 @@ Documenting them has three benefits:
 
 ---
 
+## EnergyMonitor architecture at a glance (24-Oct-2026)
+
+- **In production** (`https://energy-monitor.tech`): `en-monitor-api-gateway` (:8080) in front
+  of three microservices — `en-monitor-security-service` (:8082), `en-monitor-device-service`
+  (:8084), `en-monitor-measurement-service` (:8085) — and of `energy-monitor-backend` (:8083), a
+  Spring Modulith modular monolith that still holds Home Management, Alerts, Recommendations and
+  Notification.
+- **In progress:** migrating those four remaining contexts to microservices (Miguel Ángel García
+  Artunduaga). Their service names and ports are not defined yet.
+- **Integration:** internal REST (`/internal/**` with `X-Internal-Token`) and RabbitMQ topic
+  exchanges with a transactional outbox per service; MQTT (Mosquitto) for the devices; one shared
+  MySQL 8.4 schema in which each service owns its tables.
+- **Decisions in force:** ADR-003 (shared database), ADR-004 (gateway), ADR-007 (MQTT broker),
+  ADR-008 (RabbitMQ + outbox, supersedes ADR-002), ADR-009 (Liquibase per service, supersedes
+  ADR-006), ADR-010 (session tokens and web cookies, supersedes ADR-005), ADR-011 (MQTT
+  authentication by the device service), ADR-012 (internal REST API) and ADR-013 (modular
+  monolith first, incremental extraction). See `decisions/README.md`.
+
+Start with `overview.md` and `deployment.md`.
+
+> The guidance below is the generic template for this section. Where it disagrees with this
+> project's decisions (for example "Each service, its own DB"), the ADRs win: this project
+> chose a shared database on purpose (`ADR-003`).
+
+---
+
 ## What is here and how to fill it in
 
 ### `overview.md` ⭐ (Start here)
@@ -56,7 +82,7 @@ Denial of Service, Elevation of Privilege. For each threat: implemented mitigati
 
 ### `decisions/` ⭐⭐ — Architecture Decision Records (ADRs)
 
-#### What is an ADR?
+**What is an ADR?**
 A record of ONE important architectural decision: what was decided, why, what alternatives
 were evaluated, and what the consequences are. They are **short documents** (1-2 pages).
 

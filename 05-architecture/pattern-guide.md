@@ -17,7 +17,7 @@ possibly a scheduled job or a message consumer later) without duplicating rules.
 
 **When NOT to use it:** for a throwaway script or a service so small that the indirection of
 ports/adapters costs more than the coupling it prevents — this project does not have that case,
-since every one of the six microservices has real business rules and at least two adapters (a web
+since every service and backend module has real business rules and at least two adapters (a web
 adapter and a persistence adapter).
 
 **Project example:** every microservice separates a **domain model** (framework-free business
@@ -93,10 +93,11 @@ source knowing or caring who is listening, or how many listeners there are.
 answer before continuing — that is a direct call, not an Observer relationship.
 
 **Project example:** a new `Measurement` notifies subscribers without coupling ingestion to the
-reaction it triggers (`01-context/glossary.md`). At the process level this is realized as the
-`MeasurementRecorded` domain event over Kafka, consumed independently by `alert-service` and
-`recommendation-service` (`02-domain/domain-events.md`) — the in-process Observer pattern and the
-inter-service domain-event mechanism serve the same decoupling purpose at two different scopes.
+reaction it triggers (`01-context/glossary.md`). Across processes this is realized as the
+`measurement.recorded` RabbitMQ message published by `en-monitor-measurement-service`; inside
+`energy-monitor-backend` the `measurement` proxy republishes it as the in-memory
+`MeasurementRecorded` Spring event, which the `alert` module observes
+(`02-domain/domain-events.md`) — the same decoupling purpose at two different scopes.
 
 ---
 
@@ -141,10 +142,11 @@ actually needs at the broker level — idempotency handles duplicate _processing
 _delivery_; if duplicates must never even reach the consumer, that is a different (and usually
 more expensive) guarantee to buy from the broker, not something this pattern promises.
 
-**Project example:** `alert-service` and `recommendation-service` both check `eventId` before
-acting on a consumed `MeasurementRecorded` or `DeviceConnectivityLost` event, since MQTT/Kafka
-redelivery means the same event can arrive twice (`02-domain/domain-events.md`, "At-least-once
-delivery + Idempotency"). This is the same underlying property as the `Idempotence` glossary term
+**Project example:** every RabbitMQ consumer tolerates a second delivery, since the outbox relay
+delivers at least once with the message id: the device service's `home.deleted` consumer finds no
+module left to unlink the second time, and the measurement service's `device.linked/unlinked`
+consumer only drops a cache entry again (`02-domain/domain-events.md`, "At-least-once delivery +
+Idempotency"). This is the same underlying property as the `Idempotence` glossary term
 that also governs raw MQTT measurement ingestion (`01-context/glossary.md`).
 
 ---
@@ -158,10 +160,29 @@ cannot block every message behind it.
 **When NOT to use it:** as a place to silently lose messages — a DLQ with no alert on non-zero
 depth and no runbook for draining it is a queue nobody will ever look at again.
 
-**Project example:** `02-domain/domain-events.md` specifies 3–5 retries with exponential backoff
-before a `MeasurementRecorded` or `DeviceConnectivityLost` event moves to its topic's `.DLQ`
-(e.g. `monitoring.measurement-recorded.DLQ`), 7-day retention, and an alert when the DLQ is
-non-empty.
+**Project example:** every RabbitMQ consumer queue is durable and has a dead-letter queue; a
+message that fails three attempts (1, 2 and 4 s apart in the device and measurement services) is
+moved there, for example to `energy-monitor-backend.measurement.recorded.dlq` or
+`device-service.device.home-deleted.dlq`. There is no automated alert on a non-empty DLQ yet; the
+end-to-end test `infra/e2e/measurement-flow.sh` checks that the backend's queue and its `.dlq` end
+empty.
+
+---
+
+### Transactional Outbox
+
+**When to use it:** to guarantee a domain event is published if and only if the database
+transaction that caused it also commits — avoiding the dual-write problem of writing to the
+database and publishing to the broker as two separate, non-atomic operations.
+
+**When NOT to use it:** if the event's business impact of being occasionally lost or duplicated is
+low enough that the added table, relay process, and operational overhead are not worth it.
+
+**Project example:** **in use since October 2026** (`ADR-008-rabbitmq-transactional-outbox.md`).
+Each producer has its outbox table — `security_outbox`, `home_outbox`, `device_outbox`,
+`measurement_outbox` (`06-data/models.md`, "Outbox tables") — written in the same transaction as
+the change; a relay publishes the pending rows to RabbitMQ every second, oldest first, with
+correlated confirms and mandatory routing, and stops at the first failure.
 
 ---
 
@@ -190,25 +211,6 @@ undone.
 consistency. If one is identified, it should be documented here with the concrete steps and their
 compensations — not assumed to already exist because the golden rule mentions it.
 
-### Outbox
-
-**When to use it:** to guarantee a domain event is published if and only if the database
-transaction that caused it also commits — avoiding the classic dual-write problem of writing to
-the database and publishing to Kafka as two separate, non-atomic operations.
-
-**When NOT to use it:** if the event's business impact of being occasionally lost or duplicated is
-low enough that the added table, poller/relay process, and operational overhead are not worth it
-for that specific event.
-
-**Project example:** **not yet implemented.** `06-data/README.md` and `06-data/models.md` mention
-the Outbox pattern as the standard answer to distributed consistency in this kind of architecture,
-but no service in this project currently writes to an outbox table, and none of the 25 tables in
-`06-data/models.md` is one. This is a real gap: `measurement-service` and `device-service` publish
-`MeasurementRecorded` and `DeviceConnectivityLost` directly to Kafka today, which means a crash
-between the database write and the Kafka publish can currently lose an event silently. Adopting
-Outbox here — or explicitly accepting the dual-write risk — is a decision this project still owes
-itself, likely belonging in `ADR-002-domain-event-transport.md` once that ADR is written.
-
 ---
 
 ## Correlations
@@ -218,4 +220,4 @@ itself, likely belonging in `ADR-002-domain-event-transport.md` once that ADR is
 - Entities, Value Objects, and the Aggregate golden rule → `02-domain/entities-and-rules.md`
 - Domain events, idempotency, and DLQ configuration → `02-domain/domain-events.md`
 - Table-level schema → `06-data/models.md`
-- Kafka transport decision (where the Outbox gap should be resolved) → `ADR-002-domain-event-transport.md` (`05-architecture/decisions/records/`, pending)
+- Event transport and outbox decision → `ADR-008-rabbitmq-transactional-outbox.md` (`05-architecture/decisions/records/`, supersedes `ADR-002`)

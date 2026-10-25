@@ -28,6 +28,24 @@
 
 ---
 
+## Tools available in EnergyMonitor (24-Oct-2026)
+
+The playbook below is the target process. With the tooling actually in place there is no
+Prometheus, PagerDuty, Grafana or Kibana: detection is a user report, a red deploy job or
+`docker compose ps` on the server, and diagnosis uses `docker compose logs <service>`, the
+`/actuator/health` of each container and the RabbitMQ console (SSH tunnel). The service runbooks
+are:
+
+| Component | Runbook |
+|---|---|
+| `en-monitor-api-gateway` | `09-microservices/services/01-api-gateway/runbook.md` |
+| `en-monitor-security-service` | `09-microservices/services/02-security-service/runbook.md` |
+| `en-monitor-device-service` | `09-microservices/services/03-device-service/runbook.md` |
+| `en-monitor-measurement-service` | `09-microservices/services/04-measurement-service/runbook.md` |
+| `energy-monitor-backend` | No runbook in this repository yet; its README and `docs/Architecture.md` describe its dependencies |
+
+---
+
 ## Response playbook
 
 ### Step 1: DETECT (0-5 min)

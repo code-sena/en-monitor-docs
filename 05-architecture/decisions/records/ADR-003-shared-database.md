@@ -5,6 +5,11 @@
 - **Status:** Accepted
 - **Authors:** Miguel Angel Garcia and Juan Esteban Cortes Parra
 
+> **Implementation status (24-Oct-2026):** implemented and in production, shared by
+> `en-monitor-security-service`, `en-monitor-device-service`, `en-monitor-measurement-service` and
+> `energy-monitor-backend`. Table ownership: `06-data/models.md`; changelogs:
+> `ADR-009-liquibase-changelogs-per-service.md`. How the system reached its services instead of
+> the six named below: `ADR-013-modular-monolith-incremental-extraction.md`.
 ---
 
 ## Context

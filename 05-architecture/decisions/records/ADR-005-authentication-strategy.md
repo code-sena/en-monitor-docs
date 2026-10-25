@@ -2,9 +2,12 @@
 
 - **ID:** ADR-005
 - **Date:** 2026-09-10
-- **Status:** Accepted
+- **Status:** Superseded by ADR-010
 - **Authors:** Miguel Angel Garcia Artunduaga and Juan Esteban Cortes Parra
 
+> **Superseded on 2026-10-24 by `ADR-010-session-tokens-and-web-cookies.md`** (token lifetime,
+> public key distribution and the web session in HttpOnly cookies changed). Kept unchanged below
+> as the record of the decision taken on 2026-09-10.
 ---
 
 ## Context
@@ -86,7 +89,7 @@ stateless.
 
 - Affected services: `security-service` (issues and verifies), all five other services (verify
   only, using the published public key)
-- Documents that must be updated: `09-microservices/services/02-auth-service/decisions.md` and
+- Documents that must be updated: `09-microservices/services/02-security-service/decisions.md` and
   `README.md` currently describe a **different, generic, unfilled example** (PostgreSQL + Redis,
   an unrelated "appointment" permission example, placeholder `[fecha]` dates) that predates this
   project's actual stack decision (MySQL, per `01-context/overview.md`) — those two files need

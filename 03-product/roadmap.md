@@ -97,7 +97,7 @@ complete.
   Recommendations
 - Security review against `00-governance/security-rules.md` and `security-policy.md`
 - Load/idempotence check on MQTT ingestion (duplicate delivery must not double-count energy)
-- CI/CD pipelines green for every service (Docker + Jenkins)
+- CI/CD pipelines green for every service (Docker + GitHub Actions)
 - Documentation pass: service READMEs, ADRs, OpenAPI contracts up to date with the final
   implementation
 - Buffer for any slippage caused by the hardware dependency (Phase 1's MQTT contract work is the

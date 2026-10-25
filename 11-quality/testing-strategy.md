@@ -169,7 +169,7 @@ it('POST /orders returns 201 with the correct schema', async () => {
 
 | # | Flow | Services involved |
 |---|------|------------------|
-| 1 | User registration and login | auth-service |
+| 1 | User registration and login | en-monitor-api-gateway, en-monitor-security-service (e-mail sent by energy-monitor-backend) |
 | 2 | [Main business flow] | [services] |
 | 3 | [Critical error flow] | [services] |
 

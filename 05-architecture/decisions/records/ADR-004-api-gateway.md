@@ -5,6 +5,10 @@
 - **Status:** Accepted
 - **Authors:** Juan Esteban Cortés Parra and Miguel Angel Garcia.
 
+> **Implementation status (24-Oct-2026):** implemented and in production as
+> `en-monitor-api-gateway` (Spring Cloud Gateway Server Web MVC, port 8080). Routes and
+> responsibilities: `09-microservices/services/01-api-gateway/README.md`. The services behind it
+> are the ones of `ADR-013-modular-monolith-incremental-extraction.md`, not the six named below.
 ---
 
 ## Context

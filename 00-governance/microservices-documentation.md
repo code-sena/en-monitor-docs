@@ -4,8 +4,10 @@
 > when they are created, and when they must be updated. Applicable to the current modular monolith
 > (Spring Modulith) and will guide the migration to microservices. Non-compliance blocks the merge.
 
-> **Note:** The backend is currently a modular monolith. Each module (alert, device, home, measurement,
-> notification, recommendation, security) corresponds to a bounded context and is treated as a future microservice.
+> **Note (24-Oct-2026):** Security, Devices and Monitoring/Measurements already run as microservices
+> (`09-microservices/services/02-security-service/`, `03-device-service/`, `04-measurement-service/`), behind
+> the API gateway (`01-api-gateway/`). The modules `home`, `alert`, `recommendation` and `notification`
+> still run in the `energy-monitor-backend` modular monolith and are being migrated to microservices.
 
 ---
 

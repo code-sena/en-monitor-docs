@@ -13,6 +13,24 @@
 
 ---
 
+## Current state in EnergyMonitor (24-Oct-2026)
+
+What is actually in place in production, as opposed to the target standard described in the rest
+of this document:
+
+| Pillar | In place | Not in place |
+|---|---|---|
+| Health | Every Java component (`en-monitor-api-gateway`, `en-monitor-security-service`, `en-monitor-device-service`, `en-monitor-measurement-service`, `energy-monitor-backend`) exposes `/actuator/health`, used as the container `healthcheck`; for the security service, the device service and the backend it includes MySQL and RabbitMQ. `deploy.sh` waits for all five to be `healthy`, the web to answer 200 and `/api/v1/homes` to answer 401 through the gateway | — |
+| Logs | Spring Boot default logging, read with `docker compose logs <service>` on the host | Structured JSON logs, central aggregation (ELK, Loki) |
+| Metrics | RabbitMQ management console (queues, dead-letter queues), reachable only through an SSH tunnel | Prometheus, Grafana dashboards, RED metrics per service |
+| Traces | — | OpenTelemetry or any correlation id across services |
+| Alerting | — | Automated alerts; failures are seen in `docker compose ps`, in red deploy jobs and in user reports |
+| End-to-end checks | `infra/e2e/device-flow.sh` (21/21) and `infra/e2e/measurement-flow.sh` (25/25) on the local stack | Synthetic checks against production |
+
+Per-service checks and known symptoms: `09-microservices/services/*/runbook.md`.
+
+---
+
 ## The 3 pillars of observability
 
 ```
@@ -53,7 +71,7 @@ All services must produce JSON logs with these minimum fields:
 {
   "timestamp": "2024-01-15T10:30:00.123Z",
   "level": "INFO",
-  "service": "auth-service",
+  "service": "en-monitor-security-service",
   "version": "1.3.0",
   "environment": "production",
   "correlationId": "550e8400-e29b-41d4-a716-446655440000",

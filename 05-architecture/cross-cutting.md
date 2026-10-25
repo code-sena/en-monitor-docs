@@ -8,133 +8,119 @@
 
 ## Standard logging
 
-**Not yet decided as a project-wide standard** — no logging library, format, or aggregation tool
-is fixed in any document reviewed. Given the stack is Java 21 + Spring Boot across all six
-services (`01-context/overview.md`), the natural default is SLF4J + Logback with structured
-(JSON) output, but this has not been confirmed as a decision.
+**Not decided as a project-wide standard.** No service has its own Logback configuration or a
+log-shipping setup: all five Java components (gateway, security, device, measurement, backend)
+log with the Spring Boot defaults, and logs are read with `docker compose logs <service>`
+(`10-devops/local-setup.md`). There is no log aggregation tool.
 
 What **is** already established, and should anchor whatever logging standard gets chosen:
 
-- `AuditLog` (Security) already captures **security-relevant** actions — who did what, when, from
-  where (`01-context/scope.md`, feature #4). This is a business record with its own retention and
-  query needs, not a substitute for application logs, and should not be conflated with them.
-- Every domain event envelope already carries `metadata.correlationId` and `metadata.causationId`
-  (`02-domain/domain-events.md`) — any logging standard adopted should log these same IDs on every
-  line related to processing that event, so a log line can be tied back to the distributed trace
-  it belongs to (see "Distributed tracing" below).
+- `AuditLog` (Security) captures **security-relevant** actions — who did what, when, from where
+  (`01-context/scope.md`, feature #4). It is a business record with its own retention and query
+  needs, not a substitute for application logs.
+- Behind the gateway, every service records the caller's real address: `X-Forwarded-For` is
+  trusted only when the connection comes from loopback or the Docker network (`172.16.0.0/12`),
+  so the address in the audit trail and in the rate limits cannot be chosen by the client.
+- Every RabbitMQ message carries its id (`id_message` of the outbox row), which is what a log
+  line about consuming it should quote.
 
 **Open question:** log format (plain text vs. structured JSON), minimum log level per environment,
-and whether logs are aggregated anywhere (a local file, a self-hosted stack like Grafana Loki, or
-nothing beyond `docker logs`) — relevant given `01-context/scope.md`'s constraint that no budget
-is allocated for paid hosting or third-party services, which rules out most managed logging SaaS.
+and whether logs are aggregated anywhere beyond `docker logs` — relevant given
+`01-context/scope.md`'s constraint that no budget is allocated for paid third-party services.
 
 ---
 
 ## Distributed tracing
 
-**Partially established.** There is no tracing tool (OpenTelemetry, Zipkin, Jaeger) adopted yet,
-but the correlation mechanism a tracing tool would rely on already exists in the domain event
-contract:
+**Not in place.** No tracing library (OpenTelemetry, Micrometer Tracing, Zipkin) is a dependency
+of any service, and neither the internal REST calls (`/internal/**`) nor the RabbitMQ messages
+propagate a correlation id today. The `metadata.correlationId` / `causationId` fields described in
+`02-domain/domain-events.md` belong to the target event envelope; the RabbitMQ payloads in
+production carry only the message id and the business fields (`09-microservices/services/*/events.md`).
 
-- `metadata.correlationId` — ties every event in one business transaction together across
-  services, even when they communicate asynchronously over Kafka.
-- `metadata.causationId` — records which event or command caused this one, letting a chain of
-  causally-related events be reconstructed (`02-domain/domain-events.md`, "Standard fields for
-  all events").
-
-What is missing is the **synchronous** half: none of the REST calls documented in
-`05-architecture/overview.md` (Security's access-token claims, the `homeId`/`deviceId`
-cross-context lookups) are documented as propagating a correlation ID today. Until that is
-decided, a request that fans out over REST and then triggers a Kafka event cannot be traced
-end-to-end — only the Kafka portion can.
-
-**Open question:** whether to adopt a tracing standard (OpenTelemetry is the least vendor-specific
-option) that propagates the same `correlationId` already used in domain events across REST calls
-too, so one ID covers a request from the moment it enters the system to every event it triggers.
+**Open question:** whether to adopt a tracing standard (OpenTelemetry is the least
+vendor-specific option) that propagates one id from the gateway through the internal REST calls
+and into the outbox messages.
 
 ---
 
 ## Centralized configuration
 
-**Not yet decided.** No configuration server (Spring Cloud Config, Consul, etc.) or convention for
-per-service configuration is documented anywhere in this repository.
+**Decided by practice, not by ADR:** there is no configuration server. Each service has its own
+`application.yaml` in its repository, and the environment-specific values arrive as environment
+variables:
 
-Two relevant constraints from `01-context/scope.md` narrow the realistic options:
+- **Full local stack and production:** Docker Compose reads `infra/.env` (local) or
+  `infra/.env.prod` (server) and passes each container its variables.
+- **Development mode:** each service on the PC reads the `.env` of its own folder plus an
+  `application-local.yaml` copied from its `.example`, with the shared values taken from
+  `infra/.env`.
+- **Values shared by several services:** `INTERNAL_API_TOKEN` and `RABBITMQ_*` must be the same in
+  every service; `MYSQL_PASSWORD` is the same for all four components that use the database.
+- **Secrets:** `.env`, `.env.prod`, the RSA key pair (`keys/`) and the broker certificates
+  (`mosquitto/certs/`) are git-ignored and never versioned. Only the security service receives
+  `private.pem`; every other service receives `public.pem` only. GitHub Actions keeps only the
+  deployment secrets (`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, `DEPLOY_KNOWN_HOSTS`).
 
-- No budget for paid hosting or cloud infrastructure — rules out managed configuration services.
-- No Kubernetes in the stack (`05-architecture/deployment.md`) — rules out ConfigMaps/Secrets as
-  the mechanism, since there is no cluster to hold them.
-
-Realistic options for this project's scale (six services, two developers, Docker only) are
-per-service environment variables passed through Docker Compose, or a lightweight self-hosted
-config server — neither has been chosen.
-
-**Open question:** where does each service's configuration live (per-service `application.yml` +
-environment variables, vs. a shared config service), and how are secrets (database credentials,
-the `PasswordHasher` algorithm's parameters, device `api_key` validation secrets) kept out of any
-repository.
+The full variable list is in `10-devops/local-setup.md`.
 
 ---
 
 ## Feature flags
 
-**Not yet decided.** No feature-flag mechanism (a library, a database-backed toggle table, or a
-config-based approach) appears in any document reviewed, and no current feature in
-`01-context/scope.md` is described as needing to be toggled independently of a deployment.
-
-**Open question:** whether this project needs feature flags at all, given its scale and two-person
-team, or whether a deploy-to-release-it approach is sufficient for the MVP scope. If a concrete
-need shows up (for example, rolling out push notifications, `01-context/scope.md` feature #15,
-gradually), it should be decided then rather than built speculatively now.
+**Not decided.** No feature-flag mechanism exists. A few behaviours are switched by configuration
+rather than by a flag system — for example `MEASUREMENT_MQTT_ENABLED` (only one measurement
+subscriber may store readings; off by default, on in the infra stack), and optional integrations
+that turn themselves off when their variables are empty (Google sign-in, VAPID web push, Expo
+push, e-mail).
 
 ---
 
 ## Error handling
 
-**Not yet decided as a documented, project-wide convention**, though the architecture already
-implies where it must live: per Hexagonal Architecture (`01-context/glossary.md`), the domain
-layer does not know about HTTP, so a domain or use-case exception cannot itself carry an HTTP
-status code — that mapping has to happen in the inbound (web) adapter, service by service, but
-the mapping table itself (which domain exception → which HTTP status → which error shape in the
-response body) is not written down anywhere yet.
+**One shared error shape.** Every service renders its errors with one exception handler, and the
+gateway uses the same JSON shape for the answers it produces itself:
 
-What is already established for one specific error path:
+```json
+{ "timestamp": "...", "status": 503, "error": "...", "message": "...", "path": "/api/v1/..." }
+```
 
-- `LoginErrorLog` records failed-login error types (`INVALID_PASSWORD`, `USER_NOT_FOUND`,
-  `ACCOUNT_BLOCKED`, `ACCOUNT_INACTIVE`) as first-class, queryable data, not just a log line
-  (`06-data/models.md`, Security). This is closer to a domain error model than to generic
-  exception handling, and is a useful reference for the shape other services' error handling
-  could follow: specific, named error types rather than a single generic "bad request."
+The mapping from domain or use-case exception to HTTP status lives in each service's inbound web
+adapter, as Hexagonal Architecture requires (`01-context/glossary.md`). Answers produced by the
+gateway: 401 (missing or invalid token), 404 (no route), 429 (rate limit, with `Retry-After`),
+503 (the service refused the connection) and 504 (no answer within 30 s).
 
-**Open question:** a shared error response shape across all six services (for example, a
-`ProblemDetails`/RFC 7807-style body), and whether unhandled exceptions get a single global
-handler pattern per service or are left to Spring Boot's defaults.
+`LoginErrorLog` additionally records failed-login error types (`INVALID_PASSWORD`,
+`USER_NOT_FOUND`, `ACCOUNT_BLOCKED`, `ACCOUNT_INACTIVE`, `EMAIL_NOT_VERIFIED`) as queryable data
+(`06-data/models.md`, Security).
 
 ---
 
-## Retry policies
+## Retry and degradation policies
 
-**Established for async consumers, not yet decided for synchronous calls.**
+**Async consumers (RabbitMQ, `ADR-008`):**
 
-`02-domain/domain-events.md` already fixes the async retry policy for every Kafka consumer in
-this project:
+| Setting | Value |
+|---|---|
+| Publishing | Outbox relay every second, oldest first; a row is published only after the broker confirms it and a queue took it; the first failure stops the run and the row is retried on the next one |
+| Delivery | At least once, with the message id; consumers tolerate duplicates |
+| Consumer attempts before the dead-letter queue | 3 (1, 2 and 4 s apart in the device and measurement services) |
+| Queues | Durable, each with its `.dlq` dead-letter queue |
 
-| Setting            | Value                                 |
-| ------------------ | ------------------------------------- |
-| Retries before DLQ | 3–5                                   |
-| Backoff            | Exponential (1s → 2s → 4s → 8s)       |
-| DLQ retention      | 7 days                                |
-| Alert              | When the DLQ has more than 0 messages |
+**Synchronous internal calls:** no generic retry; each caller combines short timeouts, a cache
+and a defined answer when the other side does not respond:
 
-This applies uniformly to `alert-service` and `recommendation-service` consuming
-`MeasurementRecorded`, and to `alert-service` consuming `DeviceConnectivityLost` — see
-`05-architecture/pattern-guide.md` ("Dead Letter Queue") for when this pattern applies and why.
+| Caller → callee | Cache | When the callee does not answer |
+|---|---|---|
+| backend → security (permissions, administrators / profiles) | 30 s / 60 s | Names left out, alert mail skipped (push still goes), backend admin routes answer 503 |
+| security → backend (deletion check) | — | 1 s to connect, 2 s to read; the deletion is refused with 503 |
+| backend → device, measurement → device | 30 s, unknown devices included | Stale copy served up to 1 h; with nothing kept, 503 (a reading is dropped) |
+| backend → measurement (consumption levels / energy) | 10 min, stale copy up to 24 h / never cached | Service-specific "unavailable" exception |
+| device → backend, measurement → backend (home access) | Never cached | 503 |
+| gateway → any service | — | 2 s to connect, 30 s to read; 503 or 504 |
+| Mosquitto → device (MQTT auth/ACL) | 5 min per decision | New MQTT logins refused while the device service is down |
 
-**Not covered by the above, and not yet decided:** retry behavior for the **synchronous** REST
-calls in `05-architecture/overview.md` — for example, what `alert-service` does if its REST call
-to `home-service` to resolve a `homeId` times out or returns a 5xx. Options range from no retry
-(fail the request immediately) to a bounded retry with backoff, possibly with a circuit breaker
-if a downstream service is degraded. None of these has been chosen.
+There is no circuit breaker library in use.
 
 ---
 
@@ -158,7 +144,7 @@ Personal data in scope: `Person` (name, last_name, cellphone, address, profile_i
 | Veracidad o calidad              | Data must be truthful, complete, accurate, and kept up to date                                         | Supported structurally: `UpdateUserProfileUseCase` exists (`05-architecture/hexagonal-architecture.md`) so a data subject can correct their own data, satisfying this principle's practical requirement                                                                                                                                          |
 | Transparencia                    | The data subject can obtain, at any time, information about what data concerning them exists           | **Not implemented.** No use case or endpoint exposes "what data do you hold about me" as a single, dedicated capability — a user can see individual screens of their own data, but there is no consolidated access mechanism                                                                                                                     |
 | Acceso y circulación restringida | Treatment is limited to those authorized by the data subject or by law                                 | Backed by the RBAC mechanism already documented in `05-architecture/pattern-guide.md` and the home-scoped access model (`UserHome`) — access is already structurally restricted, not open by default                                                                                                                                             |
-| Seguridad                        | Technical, human, and administrative measures to prevent alteration, loss, unauthorized access         | **Same gaps already tracked in `05-architecture/security-threat-model.md`** (T3/T4: no TLS decision; I4: no documented home-isolation enforcement) — this principle does not need a new gap, it needs those existing ones resolved                                                                                                               |
+| Seguridad                        | Technical, human, and administrative measures to prevent alteration, loss, unauthorized access         | **Partially met.** HTTPS and MQTT over TLS are in production (`05-architecture/security-threat-model.md`, T3/T4); home isolation inside `energy-monitor-backend` is still not documented (I4) |
 | Confidencialidad                 | Everyone who handles the data must keep it reserved, even after their involvement ends                 | **Not documented.** No confidentiality/NDA expectation for team members handling production data is written down anywhere — relevant given this is a two-person team (`01-context/scope.md`) with direct database access, not an abstract policy question                                                                                        |
 
 **What this adds to the open questions below:** a consent-evidence field on `user` (Libertad), a
@@ -170,30 +156,26 @@ the TLS/encryption gaps already tracked elsewhere.
 
 ## Open questions — summary
 
-| Concern                   | Status                                                                                                                                        |
-| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Standard logging          | Not decided (library, format, aggregation)                                                                                                    |
-| Distributed tracing       | Correlation IDs exist for Kafka events; not propagated over REST; no tracing tool chosen                                                      |
-| Centralized configuration | Not decided (where config and secrets live)                                                                                                   |
-| Feature flags             | Not decided whether even needed at this scale                                                                                                 |
-| Error handling            | No shared response shape or exception-mapping convention documented                                                                           |
-| Retry policies            | Fixed for Kafka consumers; not decided for synchronous REST calls                                                                             |
-| Habeas Data (Law 1581)    | Partially met structurally (RBAC, correction); consent evidence, "my data" access, and team confidentiality expectations are not yet in place |
-
-None of these block the data model or domain work already done in `02-domain/` and `06-data/`,
-but each one will need an owner and a decision before `09-microservices/` implementation details
-can be written consistently across all six services.
+| Concern | Status |
+|---|---|
+| Standard logging | Spring Boot defaults, read with `docker compose logs`; no standard or aggregation decided |
+| Distributed tracing | Not in place; no correlation id across REST calls or messages |
+| Centralized configuration | Per-service `application.yaml` + environment variables from Compose; secrets git-ignored |
+| Feature flags | None; a few behaviours switched by configuration |
+| Error handling | One shared error shape in every service and the gateway |
+| Retry policies | Fixed for RabbitMQ (outbox relay, three attempts, dead-letter queue); synchronous calls use timeouts, caches and defined fallbacks, no generic retry |
+| Habeas Data (Law 1581) | Partially met structurally (RBAC, correction, TLS); consent evidence, "my data" access, and team confidentiality expectations are not yet in place |
 
 ---
 
 ## Correlations
 
-- Domain event envelope (correlationId/causationId, retry/DLQ settings referenced above) →
-  `02-domain/domain-events.md`
+- Event transport, outbox and dead-letter queues → `ADR-008-rabbitmq-transactional-outbox.md`
+- Target domain event envelope (correlationId/causationId) → `02-domain/domain-events.md`
 - Idempotent Consumer and Dead Letter Queue patterns → `05-architecture/pattern-guide.md`
 - Communication patterns these concerns apply to → `05-architecture/overview.md`
-- Deployment constraints (no paid hosting, no Kubernetes) that narrow the realistic options above
-  → `05-architecture/deployment.md`, `01-context/scope.md`
+- Deployment (Docker Compose, no Kubernetes) → `05-architecture/deployment.md`, `01-context/scope.md`
+- Environment variables → `10-devops/local-setup.md`
 - Security-relevant audit trail (distinct from application logging) → `06-data/models.md` (`audit_log`, `login_error_log`)
 - The requirement this section's new compliance table traces back to → `04-requirements/non-functional.md` (ERNF3.1)
 - Personal data fields referenced above → `06-data/models.md` (`person`, `user`, `user_session`)

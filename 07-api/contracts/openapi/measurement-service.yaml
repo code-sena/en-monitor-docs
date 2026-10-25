@@ -1,0 +1,333 @@
+openapi: 3.1.0
+info:
+  title: Energy Monitor Measurement API
+  description: |-
+    Readings of the measuring devices: history, latest reading and statistics of a device, consumption of a home and the consumption levels. The bearer token is issued by the security service.
+
+    Generated from the springdoc output (`/v3/api-docs`) of `en-monitor-measurement-service` at commit `56b2c7b` (branch `dev`, same content as `main`) on 2026-10-25. The code is the source of truth: regenerate this file when an endpoint changes.
+
+    Clients call these paths through `en-monitor-api-gateway`, which validates the access token first; the service validates it again. Errors use one shape: `{timestamp, status, error, message, path}`.
+
+    Internal endpoints (`/internal/**`) are not part of this contract: they are only reachable inside the Docker network with `X-Internal-Token` (see `07-api/README.md`).
+  version: v1
+servers:
+- url: https://energy-monitor.tech
+  description: Production, through the API gateway
+- url: http://localhost:8080
+  description: Development, through the API gateway
+- url: http://localhost:8085
+  description: Development mode, the service directly
+paths:
+  /api/v1/measurements:
+    get:
+      tags:
+      - measurement-controller
+      operationId: list
+      parameters:
+      - name: deviceId
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/MeasurementResponse'
+  /api/v1/measurements/statistics:
+    get:
+      tags:
+      - measurement-controller
+      operationId: statistics
+      parameters:
+      - name: deviceId
+        in: query
+        required: true
+        schema:
+          type: string
+      - name: from
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - name: to
+        in: query
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/ConsumptionStatisticsResponse'
+  /api/v1/measurements/latest:
+    get:
+      tags:
+      - measurement-controller
+      operationId: latest
+      parameters:
+      - name: deviceId
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/MeasurementResponse'
+  /api/v1/homes/{homeId}/consumption/summary:
+    get:
+      tags:
+      - home-consumption-controller
+      operationId: summary
+      parameters:
+      - name: homeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: zone
+        in: query
+        required: false
+        schema:
+          type: string
+          default: UTC
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/HomeConsumptionSummaryResponse'
+  /api/v1/homes/{homeId}/consumption/history:
+    get:
+      tags:
+      - home-consumption-controller
+      operationId: history
+      parameters:
+      - name: homeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: period
+        in: query
+        required: false
+        schema:
+          type: string
+          default: month
+      - name: zone
+        in: query
+        required: false
+        schema:
+          type: string
+          default: UTC
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/HomeConsumptionHistoryResponse'
+  /api/v1/consumption-levels:
+    get:
+      tags:
+      - consumption-level-controller
+      operationId: listConsumptionLevels
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ConsumptionLevelResponse'
+components:
+  schemas:
+    MeasurementResponse:
+      type: object
+      properties:
+        idMeasurement:
+          type: string
+        deviceId:
+          type: string
+        dateTime:
+          type: string
+          format: date-time
+        voltage:
+          type: number
+          format: double
+        current:
+          type: number
+          format: double
+        activePower:
+          type: number
+          format: double
+        storedEnergy:
+          type: number
+          format: double
+    ConsumptionStatisticsResponse:
+      type: object
+      properties:
+        deviceId:
+          type: string
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        measurementCount:
+          type: integer
+          format: int64
+        averageActivePower:
+          type: number
+          format: double
+        maxActivePower:
+          type: number
+          format: double
+        consumedEnergy:
+          type: number
+          format: double
+    DeviceConsumption:
+      type: object
+      properties:
+        deviceId:
+          type: string
+        currentPower:
+          type: number
+          format: double
+        todayEnergy:
+          type: number
+          format: double
+    HomeConsumptionSummaryResponse:
+      type: object
+      properties:
+        currentPower:
+          type: number
+          format: double
+        level:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+        todayEnergy:
+          type: number
+          format: double
+        monthEnergy:
+          type: number
+          format: double
+        dailyLimit:
+          type: number
+          format: double
+        monthlyLimit:
+          type: number
+          format: double
+        limitPeriod:
+          type: string
+        lastHours:
+          type: array
+          items:
+            $ref: '#/components/schemas/HourPower'
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceConsumption'
+    HourPower:
+      type: object
+      properties:
+        hourStart:
+          type: string
+          format: date-time
+        averagePower:
+          type: number
+          format: double
+    Bucket:
+      type: object
+      properties:
+        key:
+          type: string
+        start:
+          type: string
+          format: date-time
+        devices:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceEnergy'
+    DeviceEnergy:
+      type: object
+      properties:
+        deviceId:
+          type: string
+        energy:
+          type: number
+          format: double
+    HomeConsumptionHistoryResponse:
+      type: object
+      properties:
+        period:
+          type: string
+        from:
+          type: string
+          format: date-time
+        to:
+          type: string
+          format: date-time
+        buckets:
+          type: array
+          items:
+            $ref: '#/components/schemas/Bucket'
+        previousTotal:
+          type: number
+          format: double
+    ConsumptionLevelResponse:
+      type: object
+      properties:
+        idConsumptionLevel:
+          type: string
+        name:
+          type: string
+          enum:
+          - LOW
+          - MEDIUM
+          - HIGH
+          - CRITICAL
+        description:
+          type: string
+        minLimit:
+          type: number
+          format: double
+        maxLimit:
+          type: number
+          format: double
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
