@@ -3,6 +3,27 @@
 > **What is this?** The individual documentation for each microservice in the system.
 > This is the most active section of the repository — it is updated with every significant change.
 
+## EnergyMonitor services (24-Oct-2026)
+
+| Folder | Service | Port | Repository | Status |
+|---|---|---|---|---|
+| [`services/01-api-gateway/`](./services/01-api-gateway/README.md) | `en-monitor-api-gateway` | 8080 | `Juan-Cortes2045/en-monitor-api-gateway` | 🟢 In production |
+| [`services/02-security-service/`](./services/02-security-service/README.md) | `en-monitor-security-service` | 8082 | `Juan-Cortes2045/en-monitor-security-service` | 🟢 In production |
+| [`services/03-device-service/`](./services/03-device-service/README.md) | `en-monitor-device-service` | 8084 | `Juan-Cortes2045/en-monitor-device-service` | 🟢 In production |
+| [`services/04-measurement-service/`](./services/04-measurement-service/README.md) | `en-monitor-measurement-service` | 8085 | `Juan-Cortes2045/en-monitor-measurement-service` | 🟢 In production |
+| — | `energy-monitor-backend` (modular monolith: `home`, `alert`, `recommendation`, `notification`) | 8083 | `Juan-Cortes2045/energy-monitor-backend` | 🟢 In production; 🟡 migration of its four contexts to microservices in progress (teammate) |
+
+Home Management, Alerts, Recommendations and Notification have no folder here yet: they still run
+inside `energy-monitor-backend`, and their migration to microservices is in progress (Miguel
+Ángel García Artunduaga). Their folders will be added when their service names and ports exist.
+
+The dependency map between services is [`dependency-map.md`](./dependency-map.md). The other
+cross-cutting views this README describes below (communication patterns, event catalog, data
+ownership) are kept, for now, inside [`service-catalog.md`](./service-catalog.md) rather than as
+separate files.
+
+---
+
 ## Structure of each microservice
 
 Each service has its own folder in `services/` with this structure:
@@ -112,7 +133,7 @@ Checklist that every service must meet before going to production.
 Number services to indicate implicit dependencies:
 services with lower numbers tend to be more fundamental.
 
-Suggested convention:
+Suggested convention (this project numbers the gateway 01 and Security 02):
 - `01` = IAM / Security (all depend on this)
 - `02` = Reference / master data
 - `03-0N` = Domain services
