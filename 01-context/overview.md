@@ -29,48 +29,61 @@ The measuring device is not a user, but it does act on the system. It authentica
 
 ## Client applications
 
-The system exposes two clients over the same backend API. They are not equivalent: each one serves a different moment of use.
+The system exposes two clients over the same public API, served through the API gateway. They are not equivalent: each one serves a different moment of use.
 
 | Client | Platform | Purpose |
 |--------|----------|---------|
 | Web application | Browser | Full experience: home and device management, detailed history, statistics, and administration |
 | Mobile application | Android | Day-to-day consultation and alerts, on the device the user already carries |
 
-## Bounded contexts (modules)
+## Bounded contexts and where they run
 
-The backend is a **modular monolith** built with Spring Modulith. Each module is a bounded context with its own domain model, application layer, and hexagonal architecture (ports & adapters). Modules communicate through well-defined APIs and domain events. Each module is designed to become an independently deployable microservice in the future.
+The backend started as a **modular monolith** built with Spring Modulith, one module per bounded
+context. Since October 2026 three contexts run as their own **microservices** behind an **API
+gateway**; the other four still run in the modular monolith `energy-monitor-backend`, and
+migrating them to microservices is **in progress** (Miguel Ángel García Artunduaga). Every
+context keeps its own domain model and hexagonal architecture (ports & adapters) wherever it
+runs.
 
-| Context | Module name | Responsibility | Key events published | Depends on |
-|---------|-------------|----------------|---------------------|------------|
-| **Security** | `security` | Identity, authentication, sessions, RBAC, audit trail | — | (none) |
-| **Home Management** | `home` | Homes, membership, home-scoped roles, consumption thresholds | — | `security::api` |
-| **Devices** | `device` | Device registry, device authentication (API key), connectivity tracking | `DeviceConnectivityLost` | `home::api` |
-| **Monitoring and Measurements** | `measurement` | Measurement ingestion, consumption history, statistics, consumption levels | `MeasurementRecorded` | `device::api`, `home::api` |
-| **Alerts** | `alert` | Threshold and connectivity alerts | `AlertRaised` | `home::api`, `device::api`, `measurement::api` |
-| **Recommendations** | `recommendation` | Consumption-based suggestions | `RecommendationCreated` | `device::api`, `measurement::api`, `home::api` |
-| **Notification** | `notification` | Delivery log (email, push) for alerts, recommendations, password reset | — | `security::api`, `home::api`, `device::api`, `alert::api`, `recommendation::api` |
+| Context | Runs in | Responsibility | Key events published | Status (24-Oct-2026) |
+|---------|---------|----------------|---------------------|---------------------|
+| **Security** | `en-monitor-security-service` (:8082) | Accounts, e-mail verification, login, Google sign-in, sessions (JWT + refresh), password recovery, RBAC, audit trail, support contacts | `account.registered`, `account.administered`, `account.deleted`, mail requests (RabbitMQ) | Microservice, in production |
+| **Devices** | `en-monitor-device-service` (:8084) | Device linking and credentials (API key), appliance catalogue, MQTT authentication and ACL, commands, connectivity tracking | `device.linked`, `device.unlinked`, `device.connectivity-lost`, `device.connectivity-restored` (RabbitMQ) | Microservice, in production |
+| **Monitoring and Measurements** | `en-monitor-measurement-service` (:8085) | Measurement ingestion (MQTT), consumption history, statistics, home consumption, consumption levels | `measurement.recorded` (RabbitMQ) | Microservice, in production |
+| **Home Management** | `energy-monitor-backend` (:8083), module `home` | Homes, membership, home-scoped roles, consumption thresholds | `home.deleted` (RabbitMQ), `HomeOwnershipTransferred` (in memory) | In the monolith; migration in progress |
+| **Alerts** | `energy-monitor-backend`, module `alert` | Threshold, limit and connectivity alerts | `AlertRaised` (in memory) | In the monolith; migration in progress |
+| **Recommendations** | `energy-monitor-backend`, module `recommendation` | Consumption-based suggestions | `RecommendationCreated` (in memory) | In the monolith; migration in progress |
+| **Notification** | `energy-monitor-backend`, module `notification` | E-mail, Web Push (VAPID), mobile push (Expo) and in-app administrator notices; delivery log | — | In the monolith; migration in progress |
+
+All client requests enter through `en-monitor-api-gateway` (:8080). Details:
+`05-architecture/overview.md`.
 
 ## Technology stack
 
 | Layer | Technology | Justification |
 |-------|-----------|---------------|
-| Measuring hardware | ESP32 + PZEM-004T V3 + HLK-PM03 | The PZEM measures real electrical magnitudes rather than estimating them; the ESP32 provides Wi-Fi connectivity and enough capacity to report measurements autonomously; the HLK-PM03 allows the device to be powered from the same mains circuit it monitors |
-| Device communication | MQTT over Wi-Fi, via Eclipse Mosquitto (TLS) | Designed for constrained devices and unreliable networks; the publish/subscribe model decouples devices from the backend. The broker runs in the `devices` repository, not in the backend. |
-| Web frontend | React + Vite | The component-based model fits a dashboard with charts and reusable views; the ecosystem also provides mature support for internationalization and data visualization |
-| Android mobile application | React Native (Android only) | Shares language, component model, and mental model with the web client, so the team maintains one set of skills instead of two; produces a native Android application. iOS is not targeted and is not planned |
-| Backend | Java 21 + Spring Boot 3.x + Spring Modulith | Spring Security and OAuth2 cover the identity requirements; Spring Modulith enforces module boundaries; the ecosystem supports hexagonal architecture |
-| Database | MySQL | The relational model fits the domain, which contains many relationships; a single shared instance keeps operational complexity low at this stage |
-| Infrastructure | Docker, Docker Compose | Provides reproducible environments for local development and production |
-
-> **Note:** The backend is a **modular monolith** (single deployable artifact). Modules are separated by Spring Modulith boundaries, not by deployment. Migration to independently deployed microservices is planned but not yet executed.
+| Measuring hardware | ESP32 + PZEM-004T V3 + HLK-PM03, firmware 1.3.8 | The PZEM measures real electrical magnitudes rather than estimating them; the ESP32 provides Wi-Fi and Bluetooth (used to link a module from the web or the app) and enough capacity to report measurements autonomously; the HLK-PM03 allows the device to be powered from the same mains circuit it monitors |
+| Device communication | MQTT over Wi-Fi, via Eclipse Mosquitto with `mosquitto-go-auth` (TLS on 8883) | Designed for constrained devices and unreliable networks; the publish/subscribe model decouples devices from the services. The broker runs in the `energy-monitor-infra` Docker stack and authenticates every client against the device service (`ADR-007`) |
+| Web frontend | React 19 + Vite 8 | The component-based model fits a dashboard with charts and reusable views; the ecosystem also provides mature support for internationalization and data visualization |
+| Android mobile application | Expo 57 / React Native (Android only) | Shares language, component model, and mental model with the web client, so the team maintains one set of skills instead of two; produces a native Android application. iOS is not targeted and is not planned |
+| API gateway | Spring Cloud Gateway Server Web MVC (Spring Boot 4.0.8, Spring Cloud 2025.1.3) | Same Java/Spring stack as the services (`ADR-004`) |
+| Backend services | Java 21 + Spring Boot 4.1.1; Spring Modulith in `energy-monitor-backend` | Spring Security and the OAuth2 resource server cover the identity requirements; Spring Modulith enforces the module boundaries inside the monolith; the ecosystem supports hexagonal architecture |
+| Service-to-service events | RabbitMQ 4.1, transactional outbox per service | A change and its message commit together; at-least-once delivery with dead-letter queues (`ADR-008`) |
+| Database | MySQL 8.4, one shared schema; Liquibase per service | The relational model fits the domain; one shared instance keeps operational complexity low, with each service owning its tables (`ADR-003`, `ADR-009`) |
+| Infrastructure | Docker, Docker Compose (local, development and production modes); Nginx + Certbot on an Ubuntu VPS | Reproducible environments for local development and production (`05-architecture/deployment.md`) |
+| CI/CD | GitHub Actions, one workflow per repository | Tests on every pull request and push to `dev`/`main`; approved deployment from `main` |
 
 ## Current status
 
-- **Phase:** In development
-- **Current version:** Not yet versioned. No release tags exist.
-- **Last release:** None
-- **Implemented bounded contexts:** All 7 contexts are implemented (Security, Home Management, Devices, Monitoring and Measurements, Alerts, Recommendations, Notification)
-- **Next milestone:** Harden cross-module integration tests, document module contracts (OpenAPI), prepare for microservice extraction
+- **Phase:** In production at `https://energy-monitor.tech` since 24-Oct-2026.
+- **Current version:** Not versioned with release tags; production runs the `main` branch of each
+  repository (`09-microservices/service-catalog.md` lists the commit of each one).
+- **Implemented bounded contexts:** all seven.
+- **Architecture:** API gateway + three microservices (Security, Devices, Monitoring and
+  Measurements) + the `energy-monitor-backend` modular monolith (Home Management, Alerts,
+  Recommendations, Notification).
+- **Next milestone:** migration of the four contexts still in the monolith to microservices, in
+  progress by Miguel Ángel García Artunduaga. Project delivery: 28-Oct-2026.
 
 ## Project contacts
 
@@ -79,7 +92,7 @@ The backend is a **modular monolith** built with Spring Modulith. Each module is
 | Developer | Juan Esteban Cortés Parra | juanestebanp171@gmail.com |
 | Developer | Miguel Ángel García Artunduaga | garmiguelangel89@gmail.com |
 
-**Training program:** Software Analysis and Development — SENA, group 314556.
+**Training program:** Software Analysis and Development (ADSO) — SENA, group (ficha) 3145556.
 
 ## Correlations
 
