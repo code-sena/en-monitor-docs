@@ -6,19 +6,18 @@
 
 This project does **not** follow a database-per-service model. It uses **one physical MySQL
 instance, organized logically by bounded context** — a deliberate architectural decision (see
-`Shared Database` in `01-context/glossary.md`), to be formalized in `ADR-003-shared-database.md`
-(`05-architecture/decisions/records/`, pending). Each microservice has read/write access only to
-the tables of its own bounded context; no service directly queries or joins another service's
+`Shared Database` in `01-context/glossary.md`), formalized in `ADR-003-shared-database.md`
+(`05-architecture/decisions/records/`) and in production since 24-Oct-2026 as MySQL 8.4, schema
+`energy_monitor`. Each component has read/write access only to the tables it owns; no service directly queries or joins another service's
 tables. What this avoids is the `Distributed Monolith` anti-pattern (also defined in the
 glossary): a service reaching into another service's tables instead of requesting that data
 through an API or a domain event.
 
 ```
-✓ security-service → Security tables (same physical MySQL instance)
-✓ alert-service → Alerts tables (same physical instance)
-✓ alert-service needs home data → requests it from home-service's API, or already has homeId as
-  a stored reference (see below)
-✗ alert-service JOINs directly against home-service's homes table
+✓ en-monitor-security-service → Security tables (same physical MySQL instance)
+✓ en-monitor-measurement-service needs home data → GET /internal/homes/{homeId}/access and
+  /thresholds on energy-monitor-backend, or already has the id as a stored reference
+✗ en-monitor-measurement-service JOINs directly against the backend's home table
 ```
 
 **Cross-context foreign keys are intentionally not enforced at the database level.** A column
@@ -26,12 +25,12 @@ like `alerts.home_id` exists and is populated, but no `FOREIGN KEY ... REFERENCE
 declared for it in SQL, even though the referenced table lives in the same physical database.
 Two reasons:
 
-1. A real FK constraint would force `alert-service`'s migrations to always run after
-   `home-service`'s, and would hard-block ever separating the databases physically later — an
+1. A real FK constraint would force one service's migrations to always run after another's
+   (for example the backend's `alert` after `home`, or the measurement service after the device
+   service), and would hard-block ever separating the databases physically later — an
    option this project's architecture deliberately keeps open (see `01-context/glossary.md`).
-2. It keeps each service's own migration history self-contained, consistent with the
-   `Database migrations repository` decision in `01-context/scope.md` (one repository, with
-   per-domain changelogs).
+2. It keeps each service's own migration history self-contained: each component keeps its
+   Liquibase changelogs in its own repository and applies only those (`ADR-009`).
 
 Foreign keys **within** the same bounded context (for example `user.person_id` inside Security)
 are declared as real constraints, since both tables are always migrated together by the same
@@ -41,14 +40,60 @@ Naming, primary key format, timestamps, soft delete, auditing, units, and enum h
 repeated here — they are defined once in `06-data/modeling-conventions.md` and apply to every
 table below without exception.
 
+---
+
+## Table ownership (24-Oct-2026)
+
+| Owner (component) | Bounded context | Tables | Changesets |
+|---|---|---|---|
+| `en-monitor-security-service` | Security | `person`, `user`, `user_configuration`, `user_session`, `refresh_token`, `password_reset_token`, `password_policy`, `security_configuration`, `login_error_log`, `system_role`, `permission`, `system_role_permission`, `user_system_role`, `audit_log`, `security_outbox` | `security-001` … `security-027` |
+| `en-monitor-device-service` | Devices | `appliance_type`, `device`, `device_home`, `device_status_log`, `device_outbox` | `device-001` … `device-009` |
+| `en-monitor-measurement-service` | Monitoring and Measurements | `measurement`, `consumption_level`, `measurement_outbox` | `measurement-001` … `measurement-004` |
+| `energy-monitor-backend` (`home`) | Home Management | `home`, `home_type`, `home_thresholds`, `user_home`, `home_outbox` | `home-001` … `home-007` |
+| `energy-monitor-backend` (`alert`) | Alerts | `alert` | `alert-001` … `alert-003` |
+| `energy-monitor-backend` (`recommendation`) | Recommendations | `recommendation` | `recommendation-001` |
+| `energy-monitor-backend` (`notification`) | Notification | `notification`, `notification_preference`, `push_subscription`, `push_device` | `notification-001` … `notification-005` |
+
+Home Management, Alerts, Recommendations and Notification are being migrated out of
+`energy-monitor-backend` (in progress); their tables keep the same owner context when that
+happens. The `refresh_token` table, the four `*_outbox` tables and the notification tables are not
+detailed column by column below; their changesets are the reference.
+
+## Outbox tables
+
+Every event producer has one transactional outbox table (`ADR-008`), written in the same
+transaction as the change it announces and read by a relay that publishes to RabbitMQ every
+second. The four tables have the same columns:
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `id_message` | VARCHAR(10) | PK | Message identifier; also the message id on the broker, which consumers use to drop duplicates |
+| `message_type` | VARCHAR(60) | NOT NULL | Routing key on the broker (e.g. `device.linked`) |
+| `payload` | TEXT | NOT NULL | JSON body |
+| `occurred_at` | DATETIME(6) | NOT NULL | When the change happened; the relay publishes oldest first |
+| `published_at` | DATETIME(6) | — | Set when the broker confirmed the message |
+| `discarded_at` | DATETIME(6) | — | Set when the message is discarded instead of sent |
+| `attempts` | INT | NOT NULL, default 0 | Publishing attempts |
+| `last_error` | VARCHAR(255) | — | Last publishing error |
+
+| Table | Owner | Changeset | Exchange | Particularities |
+|---|---|---|---|---|
+| `security_outbox` | security service | `security-026` | `energy-monitor.security` | Extra `expires_at` column: a mail request expires with its code; its payload is erased once confirmed |
+| `home_outbox` | backend (`home`) | `home-007` | `energy-monitor.home` | — |
+| `device_outbox` | device service | `device-009` | `energy-monitor.device` | — |
+| `measurement_outbox` | measurement service | `measurement-004` | `energy-monitor.measurement` | One row per reading; published and discarded rows purged after 7 days |
+
+All four have an index on (`published_at`, `discarded_at`, `occurred_at`) for the relay;
+`measurement_outbox` also indexes `discarded_at` for the purge.
+
 
 ---
 
 ## Bounded Context: Security
 
-**Owning microservice:** `security-service` (`02-domain/domain-map.md`)
+**Owning component:** `en-monitor-security-service` (in production) (`02-domain/domain-map.md`)
 
-**DB Engine:** MySQL 8 — physical instance **shared** with every other service (decision to be formalized in `ADR-003-shared-database.md`, pending in `05-architecture/decisions/records/`). `security-service` has read/write access only to the tables listed in this section; no other service accesses them directly.
+**DB Engine:** MySQL 8.4 — schema **shared** with every other component (`ADR-003-shared-database.md`). Its owner has read/write access only to the tables listed in this section; no other component accesses them directly.
 
 ### Table: `person`
 
@@ -468,9 +513,9 @@ CREATE TABLE audit_log (
 
 ## Bounded Context: Home Management
 
-**Owning microservice:** `home-service` (`02-domain/domain-map.md`)
+**Owning component:** module `home` of `energy-monitor-backend` (migration to a microservice in progress) (`02-domain/domain-map.md`)
 
-**DB Engine:** MySQL 8 — physical instance **shared** with every other service (decision to be formalized in `ADR-003-shared-database.md`, pending in `05-architecture/decisions/records/`). `home-service` has read/write access only to the tables listed in this section; no other service accesses them directly.
+**DB Engine:** MySQL 8.4 — schema **shared** with every other component (`ADR-003-shared-database.md`). Its owner has read/write access only to the tables listed in this section; no other component accesses them directly.
 
 ### Table: `home_type`
 
@@ -596,9 +641,9 @@ CREATE TABLE user_home (
 
 ## Bounded Context: Devices
 
-**Owning microservice:** `device-service` (`02-domain/domain-map.md`)
+**Owning component:** `en-monitor-device-service` (in production) (`02-domain/domain-map.md`)
 
-**DB Engine:** MySQL 8 — physical instance **shared** with every other service (decision to be formalized in `ADR-003-shared-database.md`, pending in `05-architecture/decisions/records/`). `device-service` has read/write access only to the tables listed in this section; no other service accesses them directly.
+**DB Engine:** MySQL 8.4 — schema **shared** with every other component (`ADR-003-shared-database.md`). Its owner has read/write access only to the tables listed in this section; no other component accesses them directly.
 
 ### Table: `appliance_type`
 
@@ -722,9 +767,9 @@ CREATE TABLE device_home (
 
 ## Bounded Context: Monitoring and Measurements
 
-**Owning microservice:** `measurement-service` (`02-domain/domain-map.md`)
+**Owning component:** `en-monitor-measurement-service` (in production) (`02-domain/domain-map.md`)
 
-**DB Engine:** MySQL 8 — physical instance **shared** with every other service (decision to be formalized in `ADR-003-shared-database.md`, pending in `05-architecture/decisions/records/`). `measurement-service` has read/write access only to the tables listed in this section; no other service accesses them directly.
+**DB Engine:** MySQL 8.4 — schema **shared** with every other component (`ADR-003-shared-database.md`). Its owner has read/write access only to the tables listed in this section; no other component accesses them directly.
 
 ### Table: `measurement`
 
@@ -760,14 +805,6 @@ CREATE TABLE measurement (
 | `updated_at` | TIMESTAMP | NOT NULL | — | Last update timestamp (audit) |
 | `deleted_at` | TIMESTAMP | — | — | Soft-delete marker — NULL means active, a value means deleted |
 
----
-
-## Bounded Context: Alerts
-
-**Owning microservice:** `alert-service` (`02-domain/domain-map.md`)
-
-**DB Engine:** MySQL 8 — physical instance **shared** with every other service (decision to be formalized in `ADR-003-shared-database.md`, pending in `05-architecture/decisions/records/`). `alert-service` has read/write access only to the tables listed in this section; no other service accesses them directly.
-
 ### Table: `consumption_level`
 
 **Purpose:** see the `ConsumptionLevel` entity description in `02-domain/entities-and-rules.md`.
@@ -797,6 +834,14 @@ CREATE TABLE consumption_level (
 | `created_at` | TIMESTAMP | NOT NULL | — | Row creation timestamp (audit) |
 | `updated_at` | TIMESTAMP | NOT NULL | — | Last update timestamp (audit) |
 | `deleted_at` | TIMESTAMP | — | — | Soft-delete marker — NULL means active, a value means deleted |
+
+---
+
+## Bounded Context: Alerts
+
+**Owning component:** module `alert` of `energy-monitor-backend` (migration to a microservice in progress) (`02-domain/domain-map.md`)
+
+**DB Engine:** MySQL 8.4 — schema **shared** with every other component (`ADR-003-shared-database.md`). Its owner has read/write access only to the tables listed in this section; no other component accesses them directly.
 
 ### Table: `alert`
 
@@ -841,9 +886,9 @@ CREATE TABLE alert (
 
 ## Bounded Context: Recommendations
 
-**Owning microservice:** `recommendation-service` (`02-domain/domain-map.md`)
+**Owning component:** module `recommendation` of `energy-monitor-backend` (migration to a microservice in progress) (`02-domain/domain-map.md`)
 
-**DB Engine:** MySQL 8 — physical instance **shared** with every other service (decision to be formalized in `ADR-003-shared-database.md`, pending in `05-architecture/decisions/records/`). `recommendation-service` has read/write access only to the tables listed in this section; no other service accesses them directly.
+**DB Engine:** MySQL 8.4 — schema **shared** with every other component (`ADR-003-shared-database.md`). Its owner has read/write access only to the tables listed in this section; no other component accesses them directly.
 
 ### Table: `recommendation`
 
@@ -893,5 +938,7 @@ Migration tooling, rules, and rollback policy are not repeated here — see
 - Domain events that also touch this data → `02-domain/domain-events.md`
 - Naming, ID format, and other conventions → `06-data/modeling-conventions.md`
 - How schema changes are rolled out → `06-data/migration-strategy.md`
-- Shared-database decision, once formalized → `05-architecture/decisions/records/ADR-003-shared-database.md`
+- Shared-database decision → `05-architecture/decisions/records/ADR-003-shared-database.md`
+- Outbox tables → `05-architecture/decisions/records/ADR-008-rabbitmq-transactional-outbox.md`
+- Where the changelogs live → `05-architecture/decisions/records/ADR-009-liquibase-changelogs-per-service.md`
 - Service ownership per table → `09-microservices/service-catalog.md`

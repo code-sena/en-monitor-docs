@@ -10,6 +10,12 @@
 No service should access another service's database directly. If it needs data from another
 service, it requests it via API or receives it via event. This principle guarantees independence.
 
+**How EnergyMonitor applies it (24-Oct-2026):** ownership is per **table**, not per database.
+All components share one MySQL 8.4 schema (`energy_monitor`, `ADR-003`); each owns its tables,
+applies only its own Liquibase changesets (`ADR-009`), and reads other contexts' data only through
+`/internal/**` APIs or RabbitMQ events. No foreign key crosses a service boundary. The owner of
+each table is listed in `models.md` ("Table ownership").
+
 ---
 
 ## What is here and how to fill it in
