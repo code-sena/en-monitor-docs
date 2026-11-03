@@ -4,7 +4,7 @@ info:
   version: 1.0.0
   description: |
     Single entry point of the EnergyMonitor API (Spring Cloud Gateway Server Web MVC, port 8080).
-    In production since 24-Oct-2026. The gateway has no business endpoints of its own: it
+    In production since 24-Oct-2026; since 28-Oct-2026 it routes to seven services. The gateway has no business endpoints of its own: it
     forwards each request to the service that owns the path, unchanged.
 
     ## Routes (most specific first)
@@ -13,7 +13,10 @@ info:
     | `/api/v1/auth/**`, `/api/v1/admin/users/**`, `/api/v1/admin/roles/**`, `/api/v1/support/**` | en-monitor-security-service (:8082) |
     | `/api/v1/homes/{homeId}/devices/**`, `/api/v1/appliance-types/**` | en-monitor-device-service (:8084) |
     | `/api/v1/measurements/**`, `/api/v1/consumption-levels/**`, `/api/v1/homes/{homeId}/consumption/**` | en-monitor-measurement-service (:8085) |
-    | any other `/api/v1/**` | energy-monitor-backend (:8083) |
+    | the rest of `/api/v1/homes/**`, `/api/v1/home-types/**` | en-monitor-home-service (:8086) |
+    | `/api/v1/notifications/**`, `/api/v1/admin/notifications/**` | en-monitor-notification-service (:8087) |
+    | `/api/v1/alerts/**` | en-monitor-alert-service (:8088) |
+    | `/api/v1/recommendations/**` | en-monitor-recommendation-service (:8089) |
     | `/internal/**` | never forwarded (401 without a token, 403 with one) |
     | anything else | 404 |
 

@@ -1,0 +1,460 @@
+openapi: 3.1.0
+info:
+  title: Energy Monitor Notification API
+  description: 'Notification channels, preferences, the activity inbox and the notices of the administrators. Deliveries (e-mail, Web Push, mobile push) are triggered by RabbitMQ events and have no endpoint. The bearer token is issued by the security service.
+
+
+    Written from the controllers and DTOs of the service at commit `ecdbc0a` (branch `main`, 28-Oct-2026); the code is the source of truth, so regenerate or review this file when an endpoint changes. The other contracts of this folder were generated from the springdoc output (`/v3/api-docs`).
+
+
+    Clients call these paths through `en-monitor-api-gateway`, which validates the access token first; the service validates it again. Error bodies carry the failure text in `message` or `error` (the home service and the gateway use the full `{timestamp, status, error, message, path}` shape; the alert, recommendation and notification services answer with a small `{error}` body in some cases).
+
+
+    Internal endpoints (`/internal/**`) are not part of this contract: they are only reachable inside the Docker network with `X-Internal-Token` (see `07-api/README.md`).'
+  version: v1
+servers:
+- url: https://energy-monitor.tech
+  description: Production, through the API gateway
+- url: http://localhost:8080
+  description: Development, through the API gateway
+- url: http://localhost:8087
+  description: Development mode, the service directly
+security:
+- bearerAuth: []
+paths:
+  /api/v1/notifications/activity:
+    get:
+      tags:
+      - activity-notifications
+      operationId: listActivity
+      summary: Activity notifications of the caller (account, homes and devices)
+      parameters:
+      - name: homeId
+        in: query
+        required: false
+        schema:
+          type: string
+        description: Only those of this home
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ActivityNotificationDto'
+  /api/v1/notifications/activity/read:
+    put:
+      tags:
+      - activity-notifications
+      operationId: markAllRead
+      summary: Marks all the activity notifications (or those of a home) as read
+      parameters:
+      - name: homeId
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  read:
+                    type: integer
+  /api/v1/notifications/activity/{id}/read:
+    put:
+      tags:
+      - activity-notifications
+      operationId: markRead
+      summary: Marks one activity notification as read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: No content
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/notifications/activity/{id}:
+    delete:
+      tags:
+      - activity-notifications
+      operationId: deleteActivity
+      summary: Deletes an activity notification
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: No content
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/notifications/preferences:
+    get:
+      tags:
+      - notification-channels
+      operationId: preferences
+      summary: E-mail and push preferences of the caller
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesDto'
+    put:
+      tags:
+      - notification-channels
+      operationId: updatePreferences
+      summary: Updates the e-mail and push preferences
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationPreferencesDto'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPreferencesDto'
+        '400':
+          description: Invalid body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/notifications/push/public-key:
+    get:
+      tags:
+      - notification-channels
+      operationId: publicKey
+      summary: VAPID public key for Web Push
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  publicKey:
+                    type: string
+        '404':
+          description: Web Push is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/notifications/push/subscriptions:
+    post:
+      tags:
+      - notification-channels
+      operationId: subscribe
+      summary: Registers a browser push subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushSubscriptionRequest'
+      responses:
+        '204':
+          description: No content
+        '400':
+          description: Invalid body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/notifications/push/subscriptions/remove:
+    post:
+      tags:
+      - notification-channels
+      operationId: unsubscribe
+      summary: Removes a browser push subscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                endpoint:
+                  type: string
+      responses:
+        '204':
+          description: No content
+  /api/v1/notifications/push/devices:
+    post:
+      tags:
+      - notification-channels
+      operationId: registerDevice
+      summary: Registers the mobile app installation for push (Expo)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PushDeviceRequest'
+      responses:
+        '204':
+          description: No content
+        '400':
+          description: Invalid body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/notifications/push/devices/remove:
+    post:
+      tags:
+      - notification-channels
+      operationId: unregisterDevice
+      summary: Removes the push registration of an app installation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+      responses:
+        '204':
+          description: No content
+  /api/v1/notifications/push/devices/available:
+    get:
+      tags:
+      - notification-channels
+      operationId: appPushAvailable
+      summary: Tells whether app push is configured
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available:
+                    type: boolean
+        '404':
+          description: App push is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/admin/notifications:
+    get:
+      tags:
+      - admin-notifications
+      operationId: listAdmin
+      summary: In-app notices of the administrator (requires USER.READ)
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/AdminNotificationDto'
+        '403':
+          description: Missing USER.READ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/admin/notifications/{id}/read:
+    put:
+      tags:
+      - admin-notifications
+      operationId: markAdminRead
+      summary: Marks an administrator notice as read
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: No content
+        '403':
+          description: Missing USER.READ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/admin/notifications/{id}:
+    delete:
+      tags:
+      - admin-notifications
+      operationId: deleteAdmin
+      summary: Deletes an administrator notice
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: No content
+        '403':
+          description: Missing USER.READ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+components:
+  schemas:
+    ApiError:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        path:
+          type: string
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string
+    ActivityNotificationDto:
+      type: object
+      properties:
+        id:
+          type: string
+        source:
+          type: string
+          description: ACCOUNT, HOME or DEVICE
+        messageKey:
+          type: string
+        homeId:
+          type: string
+        params:
+          type: object
+          additionalProperties:
+            type: string
+          description: Names (home, device, people) at the time of the event, for the client to translate messageKey
+        createdAt:
+          type: string
+          format: date-time
+        read:
+          type: boolean
+    AdminNotificationDto:
+      type: object
+      properties:
+        id:
+          type: string
+        messageKey:
+          type: string
+        subjectUserId:
+          type: string
+        subjectName:
+          type: string
+        subjectEmail:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        read:
+          type: boolean
+    NotificationPreferencesDto:
+      type: object
+      required:
+      - emailEnabled
+      - pushEnabled
+      properties:
+        emailEnabled:
+          type: boolean
+        pushEnabled:
+          type: boolean
+        pushAvailable:
+          type: boolean
+          description: 'Read-only: Web Push is configured'
+        pushBrowsers:
+          type: integer
+          description: 'Read-only: browsers subscribed by the user'
+    PushSubscriptionRequest:
+      type: object
+      required:
+      - endpoint
+      - keys
+      properties:
+        endpoint:
+          type: string
+          maxLength: 500
+        keys:
+          type: object
+          required:
+          - p256dh
+          - auth
+          properties:
+            p256dh:
+              type: string
+              maxLength: 100
+            auth:
+              type: string
+              maxLength: 50
+    PushDeviceRequest:
+      type: object
+      required:
+      - token
+      - platform
+      properties:
+        token:
+          type: string
+          maxLength: 255
+        platform:
+          type: string
+          enum:
+          - ANDROID
+          - IOS
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
