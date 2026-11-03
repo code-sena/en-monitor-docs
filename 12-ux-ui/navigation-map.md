@@ -45,13 +45,13 @@
 | Screen | Route | Component | Minimum role | Backend service |
 |--------|-------|-----------|--------------|----------------|
 | Home | `/` | `HomePage` | Public | — |
-| Login | `/auth/login` | `LoginPage` | Public | auth-service |
-| Register | `/auth/register` | `RegisterPage` | Public | auth-service |
+| Login | `/auth/login` | `LoginPage` | Public | en-monitor-security-service |
+| Register | `/auth/register` | `RegisterPage` | Public | en-monitor-security-service |
 | Dashboard | `/dashboard` | `DashboardPage` | USER | [service] |
 | [Resource A] list | `/[resource-a]` | `[ResourceA]ListPage` | USER | [service] |
 | [Resource A] detail | `/[resource-a]/:id` | `[ResourceA]DetailPage` | USER | [service] |
 | Create [Resource A] | `/[resource-a]/new` | `[ResourceA]FormPage` | USER | [service] |
-| Admin panel | `/admin` | `AdminDashboard` | ADMIN | auth-service |
+| Admin panel | `/admin` | `AdminDashboard` | ADMIN | en-monitor-security-service |
 
 ---
 

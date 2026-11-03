@@ -1,54 +1,50 @@
-# Modelo de Datos — API Gateway
+# Data Model — API Gateway
 
-> El API Gateway es **stateless**: no tiene base de datos propia.
-> Su estado de configuración (rutas, rate limits, allowlists) se gestiona
-> mediante variables de ambiente y archivos de configuración versionados en Git,
-> no en tablas de base de datos.
+> The API gateway has **no database** and owns no table in the shared schema.
 
 ---
 
-## Motor de base de datos
+## Database engine
 
-**Motor:** No aplica — sin base de datos persistente.
+**Engine:** none.
 
-**Justificación:** Un API Gateway que requiere una BD propia introduce un punto de falla
-adicional en la capa que todo el tráfico atraviesa. El estado de routing se gestiona
-via configuración (archivos YAML o variables de ambiente), y el estado de sesión
-(token blacklist, rate limits) se delega a Redis compartido.
+**Justification:** the gateway has no domain: it routes, validates and refuses. Its routes and
+limits are code and configuration (`GatewayRoutes`, environment variables), not data.
 
 ---
 
-## Estado en memoria / Redis
+## In-memory state
 
-El API Gateway sí mantiene estado efímero:
+| Data | Storage | Lifetime | Purpose |
+|------|---------|----------|---------|
+| Rate-limit counters | Memory of the instance (fixed window) | `GATEWAY_RATE_LIMIT_WINDOW` (1 minute) | 20 `POST`s per client address and path on the public account endpoints |
 
-| Dato | Almacenamiento | TTL | Propósito |
-|------|---------------|-----|-----------|
-| Rate limit counters | Redis | 60 segundos | Conteo de peticiones por IP |
-| Token blacklist check | Redis (read-only) | Según expiración del token | Verificar tokens revocados |
-
-El auth-service es el **dueño** del token blacklist — el gateway solo lo consulta.
+The counters are per instance and start again on restart; running several instances would need a
+shared store (see `decisions.md`).
 
 ---
 
-## Archivos de configuración de rutas
+## Configuration instead of tables
 
-En lugar de tablas, las rutas se definen en:
+| What | Where |
+|---|---|
+| Which service owns each path | `routing` package (`GatewayRoutes`) of the repository |
+| Service addresses | `SECURITY_SERVICE_URL`, `DEVICE_SERVICE_URL`, `MEASUREMENT_SERVICE_URL`, `HOME_SERVICE_URL`, `NOTIFICATION_SERVICE_URL`, `ALERT_SERVICE_URL`, `RECOMMENDATION_SERVICE_URL` |
+| Public account endpoints (no token required) | `SecurityFilterChainConfiguration.PUBLIC_ENDPOINTS` |
+| CORS origins | `SECURITY_CORS_ALLOWED_ORIGINS`, `SECURITY_CORS_ALLOWED_ORIGIN_PATTERNS` |
 
-```
-config/
-├── routes.yaml          # Mapa de rutas: path → servicio + puerto
-├── rate-limits.yaml     # Límites por ruta y por rol
-└── cors.yaml            # Configuración CORS por origen
-```
-
-Estos archivos están versionados en Git y se recargo en el startup del servicio.
-Un cambio de rutas requiere un redeploy (intencional: los cambios de routing son cambios de infraestructura).
+A routing change is a code change and a redeploy (`infra/deploy/deploy.sh gateway`).
 
 ---
 
-## Correlaciones
+## Schema migration
 
-- Configuración de ambientes → `10-devops/environments.md`
-- Runbook del gateway → `runbook.md`
-- Catálogo de rutas disponibles → `09-microservices/service-catalog.md`
+Not applicable: no Liquibase changelog.
+
+---
+
+## Correlations
+
+- Environments → `10-devops/environments.md`
+- Runbook → `runbook.md`
+- Route ownership → `09-microservices/service-catalog.md`

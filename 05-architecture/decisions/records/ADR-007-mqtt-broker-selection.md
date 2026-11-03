@@ -5,6 +5,11 @@
 - **Status:** Accepted
 - **Authors:** Juan Esteban Cortés Parra
 
+> **Implementation status (24-Oct-2026):** implemented and in production in
+> `energy-monitor-infra`; `en-monitor-measurement-service` is the subscriber that stores the
+> readings, as decided. How the broker authenticates its clients is recorded in
+> `ADR-011-mqtt-authentication-by-device-service.md`; the Kafka mentioned below was replaced by
+> `ADR-008-rabbitmq-transactional-outbox.md`.
 ---
 
 ## Context

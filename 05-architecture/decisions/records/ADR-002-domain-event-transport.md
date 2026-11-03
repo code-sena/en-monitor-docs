@@ -2,9 +2,12 @@
 
 - **ID:** ADR-002
 - **Date:** 2026-09-11
-- **Status:** Accepted
+- **Status:** Superseded by ADR-008
 - **Authors:** Juan Esteban Cortés Parra
 
+> **Superseded on 2026-10-20 by `ADR-008-rabbitmq-transactional-outbox.md`.** Never implemented:
+> no Kafka broker, topic or client exists in any repository. Kept unchanged below as the record of
+> the decision taken on 2026-09-11.
 ---
 
 ## Context

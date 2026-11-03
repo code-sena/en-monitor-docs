@@ -1,0 +1,506 @@
+openapi: 3.1.0
+info:
+  title: Energy Monitor Device API
+  description: |-
+    Measuring devices of a home: linking, editing, credentials and unlinking, and the appliance catalogue. The bearer token is issued by the security service.
+
+    Generated from the springdoc output (`/v3/api-docs`) of `en-monitor-device-service` at commit `5f37861` (branch `dev`, same content as `main`) on 2026-10-25. The code is the source of truth: regenerate this file when an endpoint changes.
+
+    Clients call these paths through `en-monitor-api-gateway`, which validates the access token first; the service validates it again. Errors use one shape: `{timestamp, status, error, message, path}`.
+
+    Internal endpoints (`/internal/**`) are not part of this contract: they are only reachable inside the Docker network with `X-Internal-Token` (see `07-api/README.md`).
+  version: v1
+servers:
+- url: https://energy-monitor.tech
+  description: Production, through the API gateway
+- url: http://localhost:8080
+  description: Development, through the API gateway
+- url: http://localhost:8084
+  description: Development mode, the service directly
+paths:
+  /api/v1/homes/{homeId}/devices/{deviceId}:
+    put:
+      tags:
+      - home-device-controller
+      operationId: update
+      parameters:
+      - name: homeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: deviceId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDeviceRequest'
+        required: true
+      responses:
+        '503':
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '404':
+          description: Not Found
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '403':
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '409':
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '400':
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/HomeDeviceResponse'
+    delete:
+      tags:
+      - home-device-controller
+      operationId: unlink
+      parameters:
+      - name: homeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: deviceId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '503':
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '404':
+          description: Not Found
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '403':
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '409':
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '400':
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '204':
+          description: No Content
+  /api/v1/homes/{homeId}/devices:
+    get:
+      tags:
+      - home-device-controller
+      operationId: list
+      parameters:
+      - name: homeId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '503':
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '404':
+          description: Not Found
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '403':
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '409':
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '400':
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HomeDeviceResponse'
+    post:
+      tags:
+      - home-device-controller
+      operationId: link
+      parameters:
+      - name: homeId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LinkDeviceRequest'
+        required: true
+      responses:
+        '503':
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '404':
+          description: Not Found
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '403':
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '409':
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '400':
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '201':
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/LinkDeviceResponse'
+  /api/v1/homes/{homeId}/devices/{deviceId}/credentials:
+    post:
+      tags:
+      - home-device-controller
+      operationId: reissueCredentials
+      parameters:
+      - name: homeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: deviceId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '503':
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '404':
+          description: Not Found
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '403':
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '409':
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '400':
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/LinkDeviceResponse'
+  /api/v1/appliance-types:
+    get:
+      tags:
+      - appliance-type-controller
+      operationId: list_1
+      responses:
+        '503':
+          description: Service Unavailable
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '404':
+          description: Not Found
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '403':
+          description: Forbidden
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '409':
+          description: Conflict
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '400':
+          description: Bad Request
+          content:
+            '*/*':
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApplianceTypeResponse'
+components:
+  schemas:
+    UpdateDeviceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 50
+          minLength: 0
+        applianceTypeId:
+          type: string
+          maxLength: 10
+          minLength: 0
+        location:
+          type: string
+          maxLength: 50
+          minLength: 0
+      required:
+      - applianceTypeId
+      - name
+    HomeDeviceResponse:
+      type: object
+      properties:
+        idDevice:
+          type: string
+        name:
+          type: string
+        applianceTypeId:
+          type: string
+        applianceType:
+          type: string
+        location:
+          type: string
+        installationDate:
+          type: string
+          format: date-time
+        deviceCode:
+          type: string
+        status:
+          type: string
+        signalStrength:
+          type: integer
+          format: int32
+        lastSeen:
+          type: string
+          format: date-time
+    BrokerUserRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+        clientid:
+          type: string
+    BrokerAclRequest:
+      type: object
+      properties:
+        username:
+          type: string
+        clientid:
+          type: string
+        topic:
+          type: string
+        acc:
+          type: integer
+          format: int32
+    LinkDeviceRequest:
+      type: object
+      properties:
+        deviceCode:
+          type: string
+          minLength: 1
+          pattern: '[A-Za-z0-9]{1,6}'
+        name:
+          type: string
+          maxLength: 50
+          minLength: 0
+        applianceTypeId:
+          type: string
+          maxLength: 10
+          minLength: 0
+        location:
+          type: string
+          maxLength: 50
+          minLength: 0
+      required:
+      - applianceTypeId
+      - deviceCode
+      - name
+    Broker:
+      type: object
+      properties:
+        host:
+          type: string
+        port:
+          type: integer
+          format: int32
+    LinkDeviceResponse:
+      type: object
+      properties:
+        device:
+          $ref: '#/components/schemas/HomeDeviceResponse'
+        apiKey:
+          type: string
+        broker:
+          $ref: '#/components/schemas/Broker'
+    ApplianceTypeResponse:
+      type: object
+      properties:
+        idApplianceType:
+          type: string
+        name:
+          type: string
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

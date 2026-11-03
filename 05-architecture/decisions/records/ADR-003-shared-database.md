@@ -5,6 +5,10 @@
 - **Status:** Accepted
 - **Authors:** Miguel Angel Garcia and Juan Esteban Cortes Parra
 
+> **Implementation status (28-Oct-2026):** implemented and in production, shared by the seven
+> services (security, device, measurement, home, notification, alert and recommendation). Table ownership: `06-data/models.md`; changelogs:
+> `ADR-009-liquibase-changelogs-per-service.md`. How the system reached its services instead of
+> the six named below: `ADR-013-modular-monolith-incremental-extraction.md`.
 ---
 
 ## Context

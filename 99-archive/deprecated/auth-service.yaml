@@ -1,0 +1,305 @@
+# ⚠️ ARCHIVED — 2026-10-24
+# Replaced by: 07-api/contracts/openapi/security-service.yaml
+# Reason: early draft of an "auth-service" written before the service existed; the security
+# service (en-monitor-security-service) is in production and its contract is generated from its
+# springdoc output.
+openapi: 3.0.3
+info:
+  title: Security Service API (en-monitor-security-service) — DRAFT
+  version: 1.0.0
+  description: |
+    > DRAFT written before the service existed; NOT aligned with the code. The source of truth
+    > for the contract is the service's own springdoc output (Swagger UI at
+    > `http://localhost:8082/swagger-ui.html` in development mode). Known differences, as of
+    > 24-Oct-2026: there is no `/health` (it is `/actuator/health`) and no `/jwks` endpoint (the
+    > public key is distributed as `public.pem`); the access token lives 15 minutes, not 1 hour,
+    > and carries no roles or permissions; the web app receives its tokens in HttpOnly cookies;
+    > several endpoints are missing below (Google sign-in, e-mail verification, password
+    > recovery and change, account, profile, account deletion, permissions, `/api/v1/admin/**`,
+    > `GET /api/v1/support/contacts`). See `09-microservices/services/02-security-service/README.md`.
+
+servers:
+  - url: https://energy-monitor.tech/api/v1/auth
+    description: Production (through the API gateway)
+  - url: http://localhost:8080/api/v1/auth
+    description: Development mode, through the gateway
+  - url: http://localhost:8082/api/v1/auth
+    description: Development mode, the service directly
+
+security: []  # La mayoría de estos endpoints son públicos
+
+tags:
+  - name: Auth
+    description: Registro, login y gestión de sesiones
+  - name: Keys
+    description: Claves públicas para verificación de tokens
+  - name: Health
+    description: Estado del servicio
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      tags: [Health]
+      security: []
+      responses:
+        '200':
+          description: Servicio saludable
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok]
+                  db:
+                    type: string
+                    enum: [connected, disconnected]
+                  redis:
+                    type: string
+                    enum: [connected, disconnected]
+              example:
+                status: ok
+                db: connected
+                redis: connected
+
+  /register:
+    post:
+      summary: Registrar un nuevo usuario
+      operationId: register
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              email: usuario@example.com
+              password: "SecurePass123!"
+              name: "María García"
+      responses:
+        '201':
+          description: Usuario registrado exitosamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: El email ya está registrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: EMAIL_ALREADY_EXISTS
+                message: El email ya está registrado
+
+  /login:
+    post:
+      summary: Autenticar un usuario
+      operationId: login
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: usuario@example.com
+              password: "SecurePass123!"
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Credenciales inválidas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: INVALID_CREDENTIALS
+                message: Email o contraseña incorrectos
+        '423':
+          description: Cuenta bloqueada temporalmente por intentos fallidos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /refresh:
+    post:
+      summary: Renovar el access token
+      operationId: refreshToken
+      tags: [Auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+                  description: Refresh token obtenido en login o en el último refresh
+      responses:
+        '200':
+          description: Tokens renovados (el refresh token anterior ya no es válido)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Refresh token inválido, expirado o ya usado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /logout:
+    post:
+      summary: Cerrar sesión
+      operationId: logout
+      tags: [Auth]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+                  description: Si se provee, también revoca el refresh token
+                allDevices:
+                  type: boolean
+                  description: Si es true, revoca todos los refresh tokens del usuario
+                  default: false
+      responses:
+        '204':
+          description: Sesión cerrada exitosamente
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /jwks:
+    get:
+      summary: Claves públicas para verificación de tokens (JWKS)
+      description: Endpoint estándar JWKS para que los servicios verifiquen tokens sin llamar al auth-service.
+      operationId: getJwks
+      tags: [Keys]
+      security: []
+      responses:
+        '200':
+          description: JSON Web Key Set
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      description: JWK (RFC 7517)
+
+components:
+  schemas:
+    RegisterRequest:
+      type: object
+      required: [email, password, name]
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+        password:
+          type: string
+          minLength: 8
+          maxLength: 100
+          description: Mínimo 8 caracteres, una mayúscula, un número
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+
+    AuthResponse:
+      type: object
+      required: [accessToken, refreshToken, expiresIn, user]
+      properties:
+        accessToken:
+          type: string
+          description: JWT RS256. Incluir en Authorization Bearer para requests autenticados.
+        refreshToken:
+          type: string
+          description: Opaque token. Usar en POST /refresh cuando el access token expire.
+        expiresIn:
+          type: integer
+          description: Segundos hasta la expiración del access token
+          example: 3600
+        user:
+          $ref: '#/components/schemas/UserSummary'
+
+    UserSummary:
+      type: object
+      required: [id, email, roles]
+      properties:
+        id:
+          $ref: './_shared.yaml#/components/schemas/UUID'
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        roles:
+          type: array
+          items:
+            type: string
+            enum: [ADMIN, USER, VIEWER]
+        permissions:
+          type: array
+          items:
+            type: string
+            description: Formato "[recurso]:[accion]"
+          example: ["appointment:read", "appointment:write"]
+
+    ErrorResponse:
+      $ref: './_shared.yaml#/components/schemas/ErrorResponse'
+
+  responses:
+    BadRequest:
+      description: Error de validación
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+    Unauthorized:
+      description: Token inválido o expirado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+
+  securitySchemes:
+    bearerAuth:
+      $ref: './_shared.yaml#/components/securitySchemes/bearerAuth'

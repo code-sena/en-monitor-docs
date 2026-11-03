@@ -1,114 +1,89 @@
 # Runbook — API Gateway
 
-> Procedimientos de operación para quien esté en guardia.
-> Cada sección es ejecutable sin contexto adicional.
+> Operating procedures for whoever is on call. Commands are run on the production host from
+> `/opt/energy-monitor/infra` unless stated otherwise.
 
-**Servicio:** api-gateway
-**Puerto local:** 8080
-**Versión:** 1.0
-**Última actualización:** [YYYY-MM-DD]
+**Service:** `en-monitor-api-gateway` (container `gateway`)
+**Repository:** https://github.com/Juan-Cortes2045/en-monitor-api-gateway
+**Version:** `main` @ `0b2c164` (28-Oct-2026)
+**Last updated:** 2026-11-03
 
 ---
 
-## 1. Información rápida
+## 1. Quick service information
 
-| Campo | Valor |
+| Field | Value |
 |-------|-------|
-| Puerto local | 8080 |
-| URL producción | `https://api.[dominio]/` |
-| URL staging | `https://staging.api.[dominio]/` |
-| Dashboard Grafana | [URL del panel de gateway] |
-| Canal de alertas | [#alerts] |
-| Escalamiento | [Tech Lead — contacto] |
-| RTO objetivo | 5 min (es la puerta de entrada — P0 inmediato) |
-| RPO objetivo | N/A (stateless) |
+| Port | 8080, inside the Docker network only (no published port) |
+| Production URL | `https://energy-monitor.tech/api/v1/...` (Nginx → web container → `gateway:8080`) |
+| Health | `/actuator/health` (container healthcheck) |
+| Compose project | `energy-monitor-prod` (`docker-compose.prod.yml` + `.env.prod`) |
+| Escalation | Project team: Juan Esteban Cortés Parra, Miguel Ángel García Artunduaga |
+| State to lose on restart | Rate-limit counters only |
 
----
-
-## 2. Verificar salud
+Shortcut used below:
 
 ```bash
-# Health check público (no requiere autenticación)
-curl https://api.[dominio]/health
-
-# Respuesta esperada:
-# {"status": "ok", "timestamp": "2024-01-15T10:30:00Z"}
-
-# Si hay problemas, verificar los upstreams:
-curl -H "Authorization: Bearer [token-dev]" https://api.[dominio]/api/v1/auth/health
+emc() { docker compose -f docker-compose.prod.yml --env-file .env.prod "$@"; }
 ```
 
 ---
 
-## 3. Alertas frecuentes
-
-### Alta tasa de errores 502/503 (upstream no responde)
-
-**Síntoma:** Los servicios detrás del gateway devuelven 502 o 503.
+## 2. Verify the service is healthy
 
 ```bash
-# Ver a qué servicio corresponden los errores
-kubectl logs -n [ns] -l app=api-gateway --tail=200 | grep '"status":50'
-
-# Verificar que los pods del servicio afectado estén running
-kubectl get pods -n [ns] -l app=[servicio-afectado]
+emc ps gateway                                                            # (healthy)
+curl -s -o /dev/null -w '%{http_code}\n' https://energy-monitor.tech/api/v1/homes              # 401: the gateway answers
+curl -s -o /dev/null -w '%{http_code}\n' https://energy-monitor.tech/api/v1/appliance-types    # 401: device route
+curl -s -o /dev/null -w '%{http_code}\n' https://energy-monitor.tech/api/v1/consumption-levels # 401: measurement route
 ```
 
-**Árbol de decisión:**
-- ¿El servicio afectado tiene pods `Running`? → El problema puede ser una excepción no manejada. Ver los logs del servicio.
-- ¿Los pods están en `CrashLoopBackOff`? → El servicio se cayó. Escalar el runbook del servicio afectado.
-- ¿Todos los servicios están caídos? → Problema de red o del gateway mismo. Ver sección 3.3.
+These are the same checks `infra/deploy/deploy.sh` runs after every deployment (`/api/v1/homes`
+must answer 401 through the gateway).
 
-### Alta tasa de errores 401 (token inválido)
+---
 
-**Síntoma:** Muchos 401. Puede ser ataque o clave JWT rotada.
+## 3. Known symptoms
 
-```bash
-# Ver IPs con más 401s
-kubectl logs -n [ns] -l app=api-gateway --tail=500 | \
-  grep '"status":401' | jq '.ip' | sort | uniq -c | sort -rn | head
-```
+| Symptom | Cause | Action |
+|---|---|---|
+| The API answers **503** | The gateway cannot reach the service that owns the path | `emc ps` and `emc logs --tail 100 security device measurement home notification alert recommendation`; restart or redeploy the failing service |
+| The API answers **504** | The service took longer than 30 s (`GATEWAY_READ_TIMEOUT`) | Look at that service's logs and at MySQL |
+| Every authenticated call answers **401** | The token cannot be validated: wrong or missing `public.pem`, or the key pair was regenerated for the security service only | Check that `JWT_KEYS_DIR` holds the `public.pem` matching the security service's `private.pem`; recreate the containers |
+| The web app gets **401** while the mobile app works | The `em_access` cookie is not turned into a bearer token: the request lacks `X-Requested-With: XMLHttpRequest`, or the cookie expired | Sign in again; check the web build |
+| Many **429** | More than 20 public account `POST`s per address and path per minute (users behind one NAT share it) | Wait for the window; the counters reset on restart |
+| CORS errors in the browser | Origin not in `SECURITY_CORS_ALLOWED_ORIGINS` (only relevant when the web is served from another origin) | Fix the variable in `.env.prod` and recreate `gateway` |
 
-- ¿Una IP sola genera todos los 401? → Posible ataque. Agregar a denylist.
-- ¿Muchas IPs generan 401 después de un deploy? → La clave pública JWT puede haber cambiado. Verificar variables de ambiente del gateway.
-
-### Rate limit disparado globalmente
-
-```bash
-# Ver cuántas peticiones bloqueadas por rate limit
-kubectl logs -n [ns] -l app=api-gateway --tail=200 | grep '"status":429'
-```
-
-Si el rate limit está disparado en condiciones normales, el límite puede ser muy bajo.
-Coordinar con Tech Lead antes de modificarlo.
+Logs: `emc logs -f gateway`.
 
 ---
 
 ## 4. Rollback
 
-El API Gateway es stateless — el rollback es un redeploy de la versión anterior:
-
-```bash
-kubectl rollout history deployment/api-gateway -n [ns]
-kubectl rollout undo deployment/api-gateway -n [ns]
-kubectl rollout status deployment/api-gateway -n [ns]
-```
-
----
-
-## 5. Escalar el gateway
-
-```bash
-# Escalar horizontalmente (sin downtime, stateless)
-kubectl scale deployment/api-gateway -n [ns] --replicas=3
-kubectl get pods -n [ns] -l app=api-gateway
-```
+- `deploy.sh gateway` (run by GitHub Actions after approval) backs up MySQL, pulls `main`,
+  rebuilds only `gateway` and waits up to 300 s for the five Java services to be `healthy`, the
+  web to answer 200 and `/api/v1/homes` to answer 401. If that fails it checks out the previous
+  commit, rebuilds it and exits with an error.
+- To go back to an earlier version on purpose: revert the change in the repository and let the
+  CD workflow redeploy `main`.
 
 ---
 
-## 6. Post-incidente
+## 5. Database migrations
 
-- [ ] Gateway respondiendo con latencia P95 < 50ms
-- [ ] Zero 5xx en los últimos 5 minutos
-- [ ] Incidente registrado en `13-operations/incident-management.md`
-- [ ] Si el incidente causó SLA breach: notificar al Tech Lead
+Not applicable: the gateway has no database.
+
+---
+
+## 6. Alerts
+
+No automated alerting is configured for the gateway; failures show up in `docker compose ps`, in
+the deploy job and in user reports.
+
+---
+
+## 7. Post-incident checklist
+
+- [ ] `emc ps` shows the five Java services `(healthy)`
+- [ ] The checks of section 2 answer as expected
+- [ ] Incident recorded in `13-operations/incident-management.md`

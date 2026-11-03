@@ -4,12 +4,28 @@
 
 ## Tool
 
-**Liquibase**, kept separate from each service's own application code. **One repository per
-domain** — `security`, `home`, `devices`, `measurements`, `alerts`, `recommendations` each have
-their own changelogs and changesets. A domain's repository may only define or alter that domain's
-own tables, even though every domain's tables live in the same physical MySQL instance. This
-mirrors the rule in `06-data/modeling-conventions.md`: a domain never reaches into another
-domain's tables, whether through a foreign key, a query, or now a migration.
+**Liquibase**, with the changelogs **inside each component's own application repository**,
+applied by that component on startup (`ADR-009-liquibase-changelogs-per-service.md`, which
+supersedes `ADR-006`). A component may only define or alter its own tables, even though every
+table lives in the same MySQL 8.4 schema (`ADR-003`). This mirrors the rule in
+`06-data/modeling-conventions.md`: a domain never reaches into another domain's tables, whether
+through a foreign key, a query, or a migration.
+
+| Component | Changelog folder | Changesets (28-Oct-2026) |
+|---|---|---|
+| `en-monitor-security-service` | `db/changelog/security/` | `security-001` … `security-030` |
+| `en-monitor-device-service` | `db/changelog/device/` | `device-001` … `device-009` |
+| `en-monitor-measurement-service` | `db/changelog/measurement/` | `measurement-001` … `measurement-004` |
+| `en-monitor-home-service` | `db/changelog/home/` | `home-001` … `home-007` |
+| `en-monitor-notification-service` | `db/changelog/notification/` | `notification-001` … `notification-007` |
+| `en-monitor-alert-service` | `db/changelog/alert/` | `alert-001` … `alert-004` |
+| `en-monitor-recommendation-service` | `db/changelog/recommendation/` | `recommendation-001`, `recommendation-002` |
+
+- All components share the one `DATABASECHANGELOG` table; each applies only its own changelogs.
+- Liquibase identifies a changeset by id, author **and file path**. When a context moved to its own
+  service, its changelogs kept the same relative path, so the changesets already applied by the
+  monolith were recognised and not run again. **Never rename or move a changelog file.**
+- Changeset ids follow `{context}-{NNN}-{description}` (e.g. `measurement-004-create-measurement-outbox`).
 
 ## Migration rules
 
@@ -106,4 +122,5 @@ ALTER TABLE alert DROP COLUMN old_column;
 
 - Full schema this strategy applies to → `06-data/models.md`
 - Naming and ID conventions referenced above → `06-data/modeling-conventions.md`
+- Decision on where the changelogs live → `05-architecture/decisions/records/ADR-009-liquibase-changelogs-per-service.md`
 - Fields most likely to need a careful, staged migration → `06-data/data-dictionary.md`

@@ -1,50 +1,37 @@
-# Eventos — API Gateway
+# Events — API Gateway
 
-> El API Gateway **no emite eventos de dominio**. Su responsabilidad es de infraestructura
-> (enrutamiento, autenticación, rate limiting), no de negocio.
->
-> Los eventos de dominio (cosas que le importan al negocio) los emiten los servicios detrás del gateway.
+> The API gateway **neither publishes nor consumes events**. Its responsibility is
+> infrastructure (routing, token validation, rate limiting), not business.
 
 ---
 
-## Eventos publicados
+## Events this service PUBLISHES
 
-**Ninguno.** El API Gateway no publica al message broker.
-
----
-
-## Eventos consumidos
-
-**Ninguno.** El API Gateway no suscribe al message broker.
+**None.** The gateway has no RabbitMQ connection and no outbox.
 
 ---
 
-## Logs de acceso (no son eventos de dominio)
+## Events this service CONSUMES
 
-El gateway sí genera **logs de acceso** estructurados por cada petición HTTP:
-
-```json
-{
-  "timestamp": "2024-01-15T10:30:00.123Z",
-  "level": "info",
-  "type": "access_log",
-  "method": "POST",
-  "path": "/api/v1/auth/login",
-  "status": 200,
-  "durationMs": 45,
-  "ip": "192.168.1.100",
-  "correlationId": "550e8400-e29b-41d4-a716-446655440000",
-  "upstreamService": "auth-service",
-  "upstreamStatus": 200
-}
-```
-
-Estos logs van a la plataforma de observabilidad (`13-operations/observability.md`) pero
-**no se publican al broker de mensajes** — no son eventos de negocio.
+**None.**
 
 ---
 
-## Correlaciones
+## Delivery guarantees
 
-- Observabilidad y logs → `13-operations/observability.md`
-- Eventos de negocio de los servicios → `09-microservices/services/02-auth-service/events.md`
+Not applicable.
+
+---
+
+## Error handling
+
+Not applicable to events. For HTTP, the answers the gateway produces itself (401, 404, 429, 503,
+504) use the shared error shape (`timestamp`, `status`, `error`, `message`, `path`).
+
+---
+
+## Correlations
+
+- Events of the services behind the gateway → `09-microservices/services/02-security-service/events.md`,
+  `03-device-service/events.md`, `04-measurement-service/events.md`
+- Platform event transport → `05-architecture/decisions/records/ADR-008-rabbitmq-transactional-outbox.md`

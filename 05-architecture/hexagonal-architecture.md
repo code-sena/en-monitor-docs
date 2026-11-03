@@ -5,9 +5,15 @@
 > The database, the web framework, the message broker — all are interchangeable details.
 > What matters is the business logic, which lives at the center.
 
-> **Stack note:** all six microservices in this project (`security-service`, `home-service`,
-> `device-service`, `measurement-service`, `alert-service`, `recommendation-service`) are built on
-> **Java 21 + Spring Boot** (`01-context/overview.md`). There is no second stack to support, so
+> **Stack note:** every backend component in this project is built on **Java 21 + Spring Boot**
+> (`01-context/overview.md`): the seven microservices `en-monitor-security-service`,
+> `en-monitor-device-service`, `en-monitor-measurement-service`, `en-monitor-home-service`,
+> `en-monitor-notification-service`, `en-monitor-alert-service` and
+> `en-monitor-recommendation-service` (the last four were modules of the retired
+> `energy-monitor-backend` modular monolith).
+> Each of them is organised in these layers (`domain`, `application`, `adapter`,
+> `infrastructure`, plus `api` for what other contexts may use). `en-monitor-api-gateway` has no
+> domain and is organised by concern instead (`routing`, `security`, `ratelimit`, `error`). There is no second stack to support, so
 > this document gives the Java/Spring examples directly instead of deferring to a separate
 > `_stacks/java-spring.md` file — there would be nothing left in this document if the stack-specific
 > part were split out.
@@ -58,9 +64,9 @@ you need to simulate the database.
 
 ## Folder structure — generic, for any service
 
-This is the shape every service in this project follows. Replace `Xxx` with the aggregate or
-concept the service owns — this same layout applies to `security-service`, `home-service`,
-`device-service`, `measurement-service`, `alert-service`, and `recommendation-service` alike.
+This is the reference shape for every service in this project. Replace `Xxx`
+with the aggregate or concept the service owns. The real services differ from it in the places
+listed under "Concrete example" below.
 
 ```
 [service-name]-service
@@ -88,12 +94,13 @@ concept the service owns — this same layout applies to `security-service`, `ho
 │
 ├── application/
 │   ├── port/
-│   │   ├── in/                                # Empty by convention — see note below
+│   │   ├── in/
+│   │   │   └── DoSomethingWithXxx.java          # Driving port — use case interface
 │   │   └── out/
 │   │       └── XxxRepository.java             # Outbound port — an interface, no implementation
 │   │
 │   └── usecase/
-│       └── DoSomethingWithXxxUseCase.java     # Coordinates the domain; called directly by adapters
+│       └── DoSomethingWithXxxService.java     # Implements port/in DoSomethingWithXxx
 │
 ├── domain/
 │   ├── exception/
@@ -114,85 +121,58 @@ concept the service owns — this same layout applies to `security-service`, `ho
 
 ---
 
-## Concrete example — `security-service`
+## Concrete example — `en-monitor-security-service`
 
-The structure already built for Security, following the same layout as the reference above:
+The layout of the security service as it is in the code (`docs/Architecture.md` of its
+repository; package `com.energymonitor.security`):
 
 ```
-src/main/java/.../security/
-├── adapter/
-│   ├── in/
-│   │   └── web/                          # Primary adapters — one Controller per aggregate/concern
-│   │       ├── AuditController.java
-│   │       ├── AuthController.java
-│   │       ├── PasswordController.java
-│   │       ├── PermissionController.java
-│   │       ├── RoleController.java
-│   │       ├── SecurityConfigurationController.java
-│   │       ├── SessionController.java
-│   │       └── UserController.java
-│   └── out/                              # Secondary adapters — implement application/port/out
-│       ├── client/
-│       │   └── EmailSenderClient.java     # implements EmailSender
-│       ├── persistence/
-│       │   ├── entity/                   # @Entity classes — persistence entities, never the domain model
-│       │   ├── mapper/                   # Entity ↔ domain model translation
-│       │   ├── repository/               # Spring Data JpaRepository interfaces (framework-facing)
-│       │   └── *RepositoryAdapter.java    # implements application/port/out/*Repository
-│       └── security/
-│           ├── JwtTokenProvider.java      # implements TokenProvider
-│           └── PasswordHasherImpl.java    # implements PasswordHasher
-├── application/
-│   ├── port/
-│   │   ├── in/                            # (empty — see "Driving Port" note below)
-│   │   └── out/                           # Driven ports — what the domain needs from outside
-│   │       ├── AuditRepository.java
-│   │       ├── EmailSender.java
-│   │       ├── LoginErrorLogRepository.java
-│   │       ├── PasswordHasher.java
-│   │       ├── PasswordPolicyRepository.java
-│   │       ├── PasswordResetTokenRepository.java
-│   │       ├── PermissionRepository.java
-│   │       ├── RoleRepository.java
-│   │       ├── SecurityConfigurationRepository.java
-│   │       ├── SessionRepository.java
-│   │       ├── TokenProvider.java
-│   │       └── UserRepository.java
-│   └── usecase/                           # One class per business operation — see table below
-│       ├── AuthenticateUserUseCase.java
-│       ├── CreateUserUseCase.java
-│       ├── ...
-├── domain/
-│   ├── exception/                         # Domain exceptions — no HTTP status here, see Controllers
-│   │   ├── AccountBlockedException.java
-│   │   ├── AccountInactiveException.java
-│   │   ├── InvalidCredentialsException.java
-│   │   ├── TokenAlreadyUsedException.java
-│   │   ├── TokenExpiredException.java
-│   │   └── UserNotFoundException.java
-│   ├── model/                             # Aggregates and Entities — framework-free
-│   │   ├── User.java
-│   │   ├── Session.java
-│   │   ├── Role.java
-│   │   ├── Permission.java
-│   │   └── ...
-│   └── valueobject/
-│       ├── AuditAction.java
-│       ├── LoginErrorType.java
-│       └── UserStatus.java
-├── infrastructure/
-│   ├── config/                            # Spring wiring only — never business rules
-│   │   ├── AuthorizationServerConfig.java
-│   │   ├── OpenApiConfig.java
-│   │   └── SecurityConfig.java
-│   ├── exception/                         # @ControllerAdvice — maps domain exceptions → HTTP
-│   └── observability/
-└── SecurityServiceApplication.java        # Spring Boot bootstrap
+com.energymonitor.security
+│
+├── api                     → Contracts for other services: account events, profile and
+│                             administrator queries, mail delivery requests
+├── domain
+│   ├── model               → Domain models, value objects and domain exceptions
+│   │                         (User, Person, UserSession, RefreshToken, SystemRole, Permission,
+│   │                          AuditLog, LoginErrorLog, Email, PasswordHash, ...)
+│   └── service             → Domain services (pure rules, no framework)
+├── application
+│   ├── command, result     → Input and output of the use cases
+│   ├── exception           → Application exceptions
+│   ├── port/in             → Use case interfaces (AuthenticateUser, RegisterUser, RefreshSession,
+│   │                         DeleteAccount, AssignRole, ...)
+│   ├── port/out            → Interfaces the application depends on (UserPersistencePort,
+│   │                         PasswordHasherPort, TokenGeneratorPort, AccountEventPublisherPort, ...)
+│   └── usecase             → Use case implementations (AuthenticateUserService, ...), plain
+│                             classes with no Spring annotations
+├── adapter
+│   ├── in/web              → AuthController, AdminController, SupportController,
+│   │                         SecurityExceptionHandler, SessionCookies, internal endpoints
+│   └── out
+│       ├── persistence     → JPA entities, Spring Data repositories, mappers, *PersistenceAdapter
+│       ├── security        → BCrypt, token generation and hashing, Google OAuth client
+│       ├── messaging       → Transactional outbox, relay and RabbitMQ publisher
+│       ├── home            → Client of the home service's internal API (deletion check)
+│       └── dns             → E-mail domain check
+└── infrastructure          → Spring wiring (SecurityApplicationWiring), filter chain, JWT
+                              (JwtTokenIssuer), CORS, RBAC authorization, configuration properties
 ```
 
-`home-service`, `device-service`, `measurement-service`, `alert-service`, and
-`recommendation-service` mirror this exact package layout, with their own aggregates, use cases,
-and ports in place of Security's.
+The other six services follow the same layers (`com.energymonitor.device`, `.measurement`, `.home`,
+`.notification`, `.alert`, `.recommendation`), with extra inbound adapters for MQTT, RabbitMQ
+consumers, schedulers and the internal API. While the four last contexts were modules of the
+`energy-monitor-backend` modular monolith, `ModularityTests` (Spring Modulith) failed the build
+when a module reached past another module's `api`, and the `security`, `device` and `measurement`
+packages left in the backend were thin proxies; both disappeared when the monolith was retired
+(28-Oct-2026), and the boundary between contexts is now the network.
+
+> **Names used in the examples below.** The examples in the rest of this document were written
+> against an earlier design and keep its illustrative names. In the code: `AuthenticateUserUseCase`
+> is the `AuthenticateUser` port implemented by `AuthenticateUserService`; `UserRepository`,
+> `PasswordHasher` and `TokenProvider` are `UserPersistencePort`, `PasswordHasherPort` and
+> `TokenGeneratorPort`; `UserRepositoryAdapter` is `UserPersistenceAdapter`; password hashing is
+> `BCryptPasswordHasherAdapter`, and access tokens are signed by `JwtTokenIssuer` in
+> `infrastructure`. The shape of each example is the same.
 
 ---
 
@@ -201,32 +181,27 @@ and ports in place of Security's.
 Ports are **interfaces** (abstract contracts). The domain and application layers define them;
 adapters implement them.
 
-### Driving Port (Input Port) — a deliberate simplification in this project
+### Driving Port (Input Port)
 
-The textbook version of this pattern puts a separate interface in `application/port/in/` (e.g.
-`DoSomethingWithXxxPort`) that the use case class implements, so a controller depends on the
-interface rather than the concrete class. **This project does not do that** — as the folder
-structure above shows, `application/port/in/` is empty in every service. Controllers inject the
-concrete use case class directly:
+Each use case has an interface in `application/port/in/` that the inbound adapters depend on, and
+a plain implementation class in `application/usecase/` with no Spring annotation. The classes are
+instantiated in one wiring configuration per service (for example `SecurityApplicationWiring` in
+the security service, `DeviceServiceConfiguration` in the device service), and the transaction
+boundaries are applied there, around the use case, not inside it:
 
 ```java
-// application/usecase/DoSomethingWithXxxUseCase.java — this class itself IS the driving port
-@Service
-public class DoSomethingWithXxxUseCase {
-    public XxxResult execute(XxxCommand command) { ... }
-}
+// application/port/in/RegisterUser.java — the driving port
+public interface RegisterUser { ... }
+
+// application/usecase/RegisterUserService.java — no @Service, no @Transactional
+public class RegisterUserService implements RegisterUser { ... }
 ```
 
-This is a conscious trade-off, not an oversight: with one implementation per use case and no
-plan to swap it, the extra interface adds a layer of indirection without a corresponding benefit.
-The cost is that a controller technically depends on a concrete class instead of an abstraction —
-acceptable here because no service in this project ever substitutes a different implementation of
-a use case at runtime. If that ever changes for a specific use case, that specific one gets its
-own `port/in` interface; the rest do not need to change to stay consistent.
+An earlier version of this document described the opposite convention (an empty `port/in` and
+`@Service` use cases injected directly); the code in all the services uses the interfaces described here.
 
-**Example (`security-service`):** `AuthenticateUserUseCase` is itself the driving port that
-`AuthController` depends on directly — no `AuthenticateUserPort` interface exists anywhere in the
-codebase.
+**Example (`en-monitor-security-service`):** `AuthController` depends on the `RegisterUser`
+interface (and the other `port/in` interfaces it needs); `RegisterUserService` implements it.
 
 ### Driven Port (Output Port)
 
@@ -288,9 +263,9 @@ inside a controller, that rule belongs in the domain model or the use case, not 
 @RequestMapping("/xxx")
 public class XxxController {
 
-    private final DoSomethingWithXxxUseCase useCase;
+    private final DoSomethingWithXxx useCase;
 
-    public XxxController(DoSomethingWithXxxUseCase useCase) {
+    public XxxController(DoSomethingWithXxx useCase) {
         this.useCase = useCase;
     }
 
@@ -402,14 +377,14 @@ The use case orchestrates the domain. It calls driven ports. It contains no busi
 belongs to an Aggregate — those rules live in the domain model, not copy-pasted into the use case.
 
 ```java
-// application/usecase/DoSomethingWithXxxUseCase.java
-@Service
-public class DoSomethingWithXxxUseCase {
+// application/usecase/DoSomethingWithXxxService.java — plain class, wired in the
+// service's configuration; implements the port/in interface DoSomethingWithXxx
+public class DoSomethingWithXxxService implements DoSomethingWithXxx {
 
     private final XxxRepository xxxRepository;
     // ...one field per port this operation actually needs
 
-    public DoSomethingWithXxxUseCase(XxxRepository xxxRepository) {
+    public DoSomethingWithXxxService(XxxRepository xxxRepository) {
         this.xxxRepository = xxxRepository;
     }
 
@@ -449,7 +424,7 @@ adapter/ (infrastructure) → application/ → domain/
 ```
 
 Concretely: `domain/model/Xxx.java` never imports `jakarta.persistence.*`,
-`org.springframework.*`, or anything from `adapter/`, in any of the six services. If a domain
+`org.springframework.*`, or anything from `adapter/`, in any service. If a domain
 class needs an `@Entity` annotation to compile, that class is not in `domain/` — it belongs in
 `adapter/out/persistence/entity/`. **Example (`security-service`):** `domain/model/User.java`
 imports nothing from Spring or JPA — the `@Entity` annotation lives on `UserEntity` instead, in
@@ -466,13 +441,12 @@ public interface XxxRepository { ... }
 @Component
 public class XxxRepositoryAdapter implements XxxRepository { ... }
 
-// Spring's IoC container wires them together automatically by type at startup —
-// there is no manual composition root to maintain, but the direction of the dependency
-// is identical either way: the use case asks for the port (the interface), Spring hands
-// it the adapter (the implementation) at runtime.
-@Service
-public class DoSomethingWithXxxUseCase {
-    public DoSomethingWithXxxUseCase(XxxRepository xxxRepository, /* ... */) { ... }
+// In this project the use case is a plain class (no @Service); one wiring configuration
+// per service (e.g. SecurityApplicationWiring) creates it as a @Bean and passes it the
+// adapters. The direction of the dependency is the same: the use case asks for the port
+// (the interface), the wiring hands it the adapter (the implementation).
+public class DoSomethingWithXxxService implements DoSomethingWithXxx {
+    public DoSomethingWithXxxService(XxxRepository xxxRepository, /* ... */) { ... }
 }
 ```
 
@@ -502,13 +476,13 @@ class XxxTest {
 }
 
 // Use case test with a FAKE port (not a real DB, not @DataJpaTest)
-class DoSomethingWithXxxUseCaseTest {
+class DoSomethingWithXxxServiceTest {
 
     @Test
     void savesTheUpdatedAggregate() {
         InMemoryXxxRepository fakeRepo = new InMemoryXxxRepository();
         fakeRepo.save(existingXxx);
-        DoSomethingWithXxxUseCase useCase = new DoSomethingWithXxxUseCase(fakeRepo);
+        DoSomethingWithXxx useCase = new DoSomethingWithXxxService(fakeRepo);
 
         useCase.execute(new XxxCommand(/* ... */));
 
@@ -533,10 +507,9 @@ When reviewing a PR or a new service, verify:
 - [ ] `domain/` has no imports from `application/` or `adapter/`
 - [ ] `domain/` has no imports from frameworks (`org.springframework.*`, `jakarta.persistence.*`)
 - [ ] Every repository/external-capability interface lives in `application/port/out/`
-- [ ] `application/port/in/` stays empty **on purpose** — use case classes are the driving port
-      directly (see the note above). A PR that adds a new `port/in` interface for one specific
-      use case is fine if justified; a PR that adds one "for consistency" with no runtime reason
-      to substitute the implementation is the anti-pattern to push back on
+- [ ] Every use case has its interface in `application/port/in/`, and its implementation in
+      `application/usecase/` carries no Spring annotation (it is wired in the service's
+      configuration class, where the transaction boundary is applied)
 - [ ] Mappers (`toDomain` / `toEntity`) live in `adapter/out/persistence/mapper/`, never in `domain/`
 - [ ] HTTP request/response DTOs live in `adapter/in/web/`, never in `domain/` or `application/`
 - [ ] `@Entity` classes live in `adapter/out/persistence/entity/`, never used as the domain model
@@ -562,8 +535,8 @@ When reviewing a PR or a new service, verify:
 - Bounded Contexts → `02-domain/domain-map.md`
 - Entities, invariants, and Value Objects (`INV-004`, `INV-005`, `Threshold`, `ApiKey`, ...) → `02-domain/entities-and-rules.md`
 - Domain events published/consumed by use cases → `02-domain/domain-events.md`
-- Complementary patterns already cataloged for this project (Repository, Use Case, Observer, Factory Method, Singleton, Idempotent Consumer, DLQ, plus Saga/Outbox as not-yet-adopted) → `05-architecture/pattern-guide.md`
+- Complementary patterns already cataloged for this project (Repository, Use Case, Observer, Factory Method, Singleton, Idempotent Consumer, DLQ, Outbox, plus Saga as not-yet-adopted) → `05-architecture/pattern-guide.md`
 - Error-handling gap this document's `@ControllerAdvice` example resolves → `05-architecture/cross-cutting.md`
 - Term definitions (Port, Adapter, Use Case, Persistence Entity, Mapper, DTO) → `01-context/glossary.md`
-- Per-service documentation once each of the six services is filled in → `09-microservices/services/` (currently only the generic `_template/service/` scaffold exists)
+- Per-service documentation → `09-microservices/services/` (gateway, security, device and measurement services)
 - TDD applied to this same hexagonal structure → `11-quality/tdd-guide.md`

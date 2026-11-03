@@ -14,7 +14,7 @@
 - [ ] Get access to Slack / Teams (team channel: `#[channel-name]`)
 - [ ] Get access to Jira / Linear / GitHub Projects
 - [ ] Configure your local environment following `10-devops/local-setup.md`
-- [ ] Verify that `curl http://localhost:8080/health` responds `{"status": "ok"}`
+- [ ] Verify that `curl -s -o /dev/null -w '%{http_code}\n' http://localhost/api/v1/homes` answers `401` (full Docker stack: the gateway answers) and `docker compose ps` shows the five Java services `(healthy)`
 
 ### Afternoon: Read core documentation
 

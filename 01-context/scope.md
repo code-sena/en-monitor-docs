@@ -24,29 +24,31 @@ What the system **DOES build and maintain**:
 | 8   | Consumption history and statistics | Consumption viewed over time, per home and per device                                                                                                                                                                                  | Monitoring and Measurements |
 | 9   | Threshold-based alerts             | Notify when consumption approaches or exceeds a configured limit, or when a device stops reporting                                                                                                                                     | Alerts                      |
 | 10  | Recommendations                    | Suggestions generated from a home's own measured consumption behavior                                                                                                                                                                  | Recommendations             |
-| 11  | MQTT broker and ingestion design   | Eclipse Mosquitto receives device publications, per `ADR-007-mqtt-broker-selection.md`. The topic and payload contract between devices and the backend is not yet defined                                                             | Monitoring and Measurements |
+| 11  | MQTT ingestion endpoint            | Devices publish over MQTT (Mosquitto, TLS 8883); the device service authenticates every client (`/internal/mqtt/auth/*`) and the measurement service stores the readings; the broker runs in the `energy-monitor-infra` Docker stack | Devices, Monitoring and Measurements |
 | 12  | Web application                    | Full-featured client: management, detailed history, statistics                                                                                                                                                                         | Frontend (React)            |
 | 13  | Android application                | Consultation and alerts client for daily use                                                                                                                                                                                           | Mobile (React Native)       |
-| 14  | Measuring device (hardware)        | ESP32 + PZEM-004T V3 unit that performs real electrical measurement, not estimation                                                                                                                                                    | Hardware                    |
-| 15  | Push notifications                 | Alerts and recommendations are delivered through an external push channel, in addition to being surfaced inside the web and Android clients                                                                                            | Alerts / Recommendations    |
+| 14  | Measuring device (hardware)        | ESP32 + PZEM-004T V3 unit that performs real electrical measurement, not estimation                                                                                                                                                    | Hardware (firmware in `energy-monitor-backend/firmware`) |
+| 15  | Notification delivery              | Alerts, recommendations, and password reset delivered by email and Web Push; delivery log persisted                                                                                                                                    | Notification                |
 | 16  | Internationalized interface        | The interface is built with `react-i18next` and already supports more than one language                                                                                                                                                | Frontend (React)            |
 
 ### Included integrations
 
 | External component   | Integration type | Purpose                                                                              |
 | -------------------- | ---------------- | ------------------------------------------------------------------------------------ |
-| ESP32 + PZEM-004T V3 | MQTT (publish)   | The device publishes measurements to the backend; the backend never calls the device |
+| ESP32 + PZEM-004T V3 | MQTT (publish)   | The device publishes measurements to the broker; only the device service publishes to a device |
+| Eclipse Mosquitto    | MQTT broker      | Runs in `energy-monitor-infra`; authenticates devices through the device service's HTTP endpoint              |
+| SMTP server          | Email            | For password reset, alerts, recommendations (configured via env vars)                |
+| VAPID / Web Push     | Push notifications | Browser push for alerts and recommendations                                         |
 
 ### Environments being built
 
 | Environment       | Purpose                                                                                              |
 | ----------------- | ---------------------------------------------------------------------------------------------------- |
 | Local             | Development on each developer's machine, including a locally connected or simulated measuring device |
-| Development (dev) | Integration testing between services before merging to `main`                                        |
+| Development (dev) | Integration testing between modules before merging to `main`                                        |
 | Production        | The environment the finished project is evaluated and demonstrated in                                |
 
-A dedicated staging environment is not planned given the size of the team; `dev` absorbs that
-role for this project.
+A dedicated staging environment is not planned given the size of the team; `dev` absorbs that role for this project.
 
 ---
 
@@ -59,14 +61,14 @@ What the system **does NOT build** in this version and why:
 | 1   | iOS application                                | The mobile app is built with React Native but targets Android only; no iOS build, signing, or App Store distribution is planned                                                                            | N/A — not planned                                                          |
 | 2   | Manual consumption entry from the utility bill | Superseded by automatic MQTT ingestion once the hardware was defined. Appears in the original SRS as the input method, but that description is historical and does not reflect the current architecture    | N/A — superseded, not deferred                                             |
 | 3   | Dedicated administration UI for Security       | The administrative use cases (role/permission assignment, security configuration, password policy) are exposed as backend endpoints and operated directly during this phase; no screens are built for them | Possible — depends on whether a non-technical administrator is ever needed |
-| 4   | Physically separate database per service       | All services currently share one physical MySQL instance, organized logically by domain, per the project's current architectural decision                                                                  | Possible — see `05-architecture/decisions/`                                |
+| 4   | Physically separate database per module        | All modules currently share one physical MySQL instance, organized logically by domain, per the project's current architectural decision                                                                  | Possible — see `05-architecture/decisions/`                                |
 | 5   | Energy cost estimation in local currency       | The project has no agreement with any utility provider, so there is no tariff data source to calculate a monetary cost from. The system reports energy (kWh), not billed cost                              | N/A — blocked on an external agreement that does not exist                 |
+| 6   | OTA firmware updates                           | Firmware updates require USB cable; no downlink channel implemented                                                                                                                                       | Possible — see `devices/README.md` Known limitations                       |
+| 7   | Multi-tenant SaaS                              | Single-tenant per deployment; no organization/workspace abstraction                                                                                                                                       | N/A — not in scope                                                         |
 
 ### What another system / team handles (and why not us)
 
-This project has no functional dependency on another system or team. Other SENA groups are
-building their own, unrelated projects; nothing they produce is consumed by, or required for,
-Energy Monitor.
+This project has no functional dependency on another system or team. Other SENA groups are building their own, unrelated projects; nothing they produce is consumed by, or required for, Energy Monitor.
 
 ---
 
@@ -76,9 +78,10 @@ Energy Monitor.
 
 | #   | Assumption                                                                                             | Consequence if false                                                                                                             |
 | --- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | All services can reach one shared MySQL instance over the network during development and evaluation    | The shared-database decision in the glossary and ADRs would need to be revisited                                                 |
+| 1   | All modules can reach one shared MySQL instance over the network during development and evaluation    | The shared-database decision in the glossary and ADRs would need to be revisited                                                 |
 | 2   | The team has continuous Wi-Fi connectivity available where devices are installed                       | MQTT ingestion could not rely on real-time delivery; offline buffering on the device would become mandatory rather than optional |
 | 3   | End users access the system on modern browsers and Android versions actively supported by React Native | Compatibility work for older platforms would be added                                                                            |
+| 4   | The MQTT broker (`energy-monitor-infra`) and the device service that authenticates it are deployed together; the legacy `energy-monitor-devices` repository is no longer used to run anything | If separated, the MQTT auth contract (`/internal/mqtt/auth/*`) must be versioned and tested independently |
 
 ---
 
@@ -98,8 +101,10 @@ Energy Monitor.
 
 | Dependency                                                                                                 | Team / Provider          | Required date                                       | Status         |
 | ---------------------------------------------------------------------------------------------------------- | ------------------------ | --------------------------------------------------- | -------------- |
-| Database migrations repositories (Liquibase, one repository per domain, each restricted to its own tables) | Internal, separate repos | Needed before any service connects to a real schema | 🟡 In progress |
-| PZEM-004T V3 hardware units                                                                                | Internal procurement     | September 15, 2026                                  | 🟡 In progress |
+| Database migrations (Liquibase, one changelog folder per service, logically organized by context)           | Internal                 | Needed before any module connects to a real schema | ✅ Done        |
+| PZEM-004T V3 hardware units                                                                                | Internal procurement     | October 01, 2026                                  | 🟡 In progress |
+| Let's Encrypt TLS certificates for MQTT broker                                                             | Internal (certbot)       | Before production deploy                            | 🟡 Planned     |
+| VAPID keys for Web Push                                                                                    | Internal (openssl)       | Before production deploy                            | 🟡 Planned     |
 
 ---
 
@@ -121,3 +126,4 @@ The scope can change, but the change has a process:
 - Term glossary → `01-context/glossary.md`
 - System overview → `01-context/overview.md`
 - Scope-related risks → `15-project-control/risks.md`
+- Module contracts → `07-api/contracts/`

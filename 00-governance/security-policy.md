@@ -22,11 +22,11 @@
 
 | Property | Required value |
 |----------|---------------|
-| Signing algorithm | RS256 (asymmetric) or HS256 with 256+ bit secret |
-| Access token expiration | 1 hour (`exp`) |
-| Refresh token expiration | 7 days |
-| Required claims | `sub` (userId), `iat`, `exp`, `jti` (unique token ID) |
-| Client storage | `httpOnly cookie` (web) or Keychain/Keystore (mobile) |
+| Signing algorithm | RS256 (asymmetric). Private/public keys configured via paths. |
+| Access token expiration | 15 minutes (`exp`) (as implemented) |
+| Refresh token expiration | 7 days (rotation on use as implemented) |
+| Required claims | `sub` (userId), `iat`, `exp`, `jti` (unique token ID), `iss`, `scope`/roles as applicable |
+| Client storage | Secure storage (httpOnly cookie for web where applicable) or secure mobile storage (Keychain/Keystore) |
 
 **Prohibited in the payload:**
 - Passwords
@@ -35,7 +35,7 @@
 
 ### Refresh Token
 
-- Stored in the database (with bcrypt hash)
+- Stored in the database as a hash (SHA-256), never in plain text
 - Mandatory rotation on each use (one refresh token = one use)
 - Invalidated on logout and on password change
 - ALL active tokens invalidated if use of a revoked token is detected
@@ -46,32 +46,18 @@
 
 ### RBAC (Role-Based Access Control)
 
-| Role | Description | Permissions |
-|------|-------------|------------|
-| `SUPER_ADMIN` | System technical administrator | All |
-| `ADMIN` | Business administrator | [define] |
-| `OPERATOR` | Operator with write permissions | [define] |
-| `VIEWER` | Read-only | [define] |
-| `[CUSTOM_ROLE]` | [description] | [define] |
+The system implements RBAC with system roles and permissions. Global roles are assigned via `UserSystemRole`. Home-scoped roles (`OWNER`, `MEMBER`) exist for home membership and are separate from global system roles.
 
 **Permission model:**
 
 ```
 Permission: [resource]:[action]
-
-Examples:
-  orders:create
-  orders:read
-  orders:update
-  orders:delete
-  users:read
-  reports:export
 ```
 
 **Validation:**
-- The API Gateway validates the JWT (signature and expiration)
-- Each service validates the role permissions for the specific operation
-- Roles are included in the JWT as claim `roles: ["OPERATOR", "VIEWER"]`
+- JWT signature and expiration are validated on each request (resource server)
+- Each bounded context validates permissions for protected operations as per use cases
+- Access control is enforced at the application/use case layer (not only controllers)
 
 ---
 
@@ -86,8 +72,11 @@ Examples:
 
 ### Internal service-to-service communication
 
-- mTLS for service-to-service communication in production (if possible with service mesh)
-- Bearer token or internal API key for services that do not support mTLS
+As implemented (28-Oct-2026):
+- Every context is its own service; there is no in-process communication between contexts (the modular monolith that had it was retired).
+- Between services, internal REST under `/internal/**` is accepted only from loopback or the Docker network **and** with the shared `X-Internal-Token` header (`INTERNAL_API_TOKEN`), compared in constant time; the API gateway never forwards `/internal/**`. Mosquitto's `/internal/mqtt/auth/**` calls are restricted by network only.
+- Events between services go through RabbitMQ (credentials `RABBITMQ_*`), reachable only inside Docker.
+- There is no mTLS; traffic inside the Docker network is plain HTTP/AMQP, and HTTPS is terminated at the host's Nginx.
 
 ---
 
@@ -107,6 +96,8 @@ Examples:
 - API keys: every 90 days
 - TLS certificates: 60 days before expiration
 - DB passwords: every 6 months or immediately if compromise is suspected
+- JWT private keys: rotate per key management policy
+- Password reset pepper: rotate with careful handling (invalidates existing codes)
 
 ---
 
@@ -230,4 +221,4 @@ const SECURITY_EVENTS = [
 - Security non-functional requirements → `04-requirements/non-functional.md`
 - ADR on authentication → `05-architecture/decisions/`
 - Security event observability → `13-operations/observability.md`
-- RBAC implemented in → `09-microservices/services/XX-auth-service/`
+- RBAC implemented in → `09-microservices/services/02-security-service/` (`en-monitor-security-service`)

@@ -1,0 +1,1145 @@
+openapi: 3.1.0
+info:
+  title: Energy Monitor API
+  description: |-
+    Authentication, session and password management for Energy Monitor. Stateless bearer-token API: no HTTP session and no cookie is created, so every credential travels in the request or response body.
+
+    Generated from the springdoc output (`/v3/api-docs`) of `en-monitor-security-service` at commit `c97bae0` (branch `dev`, same content as `main`) on 2026-10-25. The code is the source of truth: regenerate this file when an endpoint changes.
+
+    Clients call these paths through `en-monitor-api-gateway`, which validates the access token first; the service validates it again. Errors use one shape: `{timestamp, status, error, message, path}`.
+
+    Internal endpoints (`/internal/**`) are not part of this contract: they are only reachable inside the Docker network with `X-Internal-Token` (see `07-api/README.md`).
+  version: v1
+servers:
+- url: https://energy-monitor.tech
+  description: Production, through the API gateway
+- url: http://localhost:8080
+  description: Development, through the API gateway
+- url: http://localhost:8082
+  description: Development mode, the service directly
+tags:
+- name: Authentication
+  description: 'Registration, sign-in, session renewal and closure, and password management. Endpoints
+    under this tag are stateless: no HTTP session and no cookie is ever created, so every credential travels
+    in the request or the response body and the only supported authentication header is ''Authorization:
+    Bearer <JWT>''.'
+- name: Administration
+  description: User directory, account states and global roles
+paths:
+  /api/v1/auth/profile:
+    put:
+      tags:
+      - Authentication
+      summary: Update the caller's own profile
+      description: 'Edits the name, the account address and the avatar of the authenticated caller. Every
+        field is optional and an absent one is left unchanged; the name is replaced as a pair, since a
+        person must have both a first name and a last name. The identity is taken from the access token''s
+        subject rather than from any request field, so a caller can only edit its own profile and no body
+        can point the edit at another account. The response is the profile as stored, so a client can
+        tell a rename that was written from one that was merely accepted. No phone number is accepted:
+        the field was removed from the model and from this contract because notifications are email only,
+        and a body still carrying it is ignored rather than rejected, so older clients keep working.'
+      operationId: updateProfile
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProfileRequest'
+        required: true
+      responses:
+        '200':
+          description: Profile updated; the stored person is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileResponse'
+              example:
+                idPerson: PER-9f8e7d6c5b
+                name: Grace
+                lastName: Hopper
+        '400':
+          description: 'Validation error: the body is absent, unparseable, carries a name longer than
+            its column or a malformed new address'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Missing, malformed or expired access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: The token is valid but the account, or the person it points at, has been deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: The requested new address already belongs to another account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '405':
+          description: The route exists but not for this verb; the profile is replaced, so only PUT edits
+            it and the allowed methods come back in the Allow header
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+  /api/v1/admin/users/{idUser}/status:
+    put:
+      tags:
+      - Administration
+      summary: Change an account's state
+      description: Moves another account to ACTIVE, INACTIVE or BLOCKED. Leaving ACTIVE revokes its open
+        sessions. Requires USER.MANAGE.
+      operationId: changeStatus
+      parameters:
+      - name: idUser
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangeAccountStatusRequest'
+        required: true
+      responses:
+        '204':
+          description: State changed
+        '400':
+          description: Missing or unknown status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: The caller lacks USER.MANAGE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: No such account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: The caller targeted their own account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+  /api/v1/admin/users/{idUser}/roles/{roleName}:
+    put:
+      tags:
+      - Administration
+      summary: Grant a global role
+      description: Idempotent. Requires ROLE.MANAGE. 404 when the account or an assignable role with that
+        name does not exist; 409 on the caller's own account.
+      operationId: grantRole
+      parameters:
+      - name: idUser
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: roleName
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+      security:
+      - bearerAuth: []
+    delete:
+      tags:
+      - Administration
+      summary: Revoke a global role
+      description: Idempotent. Requires ROLE.MANAGE. 404 when the account or the role does not exist;
+        409 on the caller's own account.
+      operationId: revokeRole
+      parameters:
+      - name: idUser
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: roleName
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+      security:
+      - bearerAuth: []
+  /api/v1/auth/register:
+    post:
+      tags:
+      - Authentication
+      summary: Register an account
+      description: 'Creates an account from the supplied email, password and name, and returns the created
+        account without any credential field. Open by design: a caller has no identity yet, so there is
+        nothing to authenticate.'
+      operationId: register
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+        required: true
+      responses:
+        '201':
+          description: Account created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+              example:
+                idUser: USR-1a2b3c4d5e
+                idPerson: PER-9f8e7d6c5b
+                email: ada@example.com
+                status: ACTIVE
+                lastLogin: null
+                profileImage: null
+        '400':
+          description: 'Validation error: the body is missing a field, the email is malformed, or its
+            domain does not exist or cannot receive mail (no MX nor address record)'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: An account already exists for this email
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: The password is well-formed but breaks the configured policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/auth/refresh:
+    post:
+      tags:
+      - Authentication
+      summary: Renew credentials
+      description: 'Exchanges a refresh token for a new access token and a new refresh token, rotating
+        the session. Reachable without an access token, which is the whole point: this is what a client
+        calls once its access token has expired. Every failure leaves as the same 401 with the same body,
+        so a client cannot use it to learn which tokens are worth replaying. A cookie client (X-Session-Transport:
+        cookie) sends no body: it presents the refresh cookie and receives both cookies again.'
+      operationId: refresh
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: Credentials renewed and the refresh token rotated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RefreshResponse'
+              example:
+                accessToken: eyJhbGciOiJSUzI1NiJ9...
+                refreshToken: 8b2e6f1a3c5d4907...
+        '400':
+          description: 'Validation error: the body carries no refresh token'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: The refresh token is unknown, expired, revoked or replayed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/auth/password/reset:
+    post:
+      tags:
+      - Authentication
+      summary: Complete a password reset
+      description: 'Hashes the presented reset token, looks the hash up, rejects it when it is unknown,
+        expired or already used, checks the replacement against the configured policy, and commits the
+        new hash, the token consumption and the audit row in one transaction. The token itself is accepted
+        because redeeming it is the purpose of the request, and it is never echoed in the response. Open
+        by design: the reset token is the credential, so no access token is required.'
+      operationId: resetPassword
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordRequest'
+        required: true
+      responses:
+        '200':
+          description: Password replaced
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: Password updated.
+        '400':
+          description: Validation error, or the reset token is unknown, expired or already used
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: The new password is well-formed but breaks the configured policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/auth/password/forgot:
+    post:
+      tags:
+      - Authentication
+      summary: Request a password reset
+      description: Checks that the address belongs to an account and sends it a recovery code. Answers
+        202 with no body - never the code - when it does, and 404 when no account is registered with the
+        address.
+      operationId: forgotPassword
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ForgotPasswordRequest'
+        required: true
+      responses:
+        '202':
+          description: Request accepted, empty body
+        '400':
+          description: 'Validation error: the body carries no email'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: No account is registered with the address
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/auth/password/change:
+    post:
+      tags:
+      - Authentication
+      summary: Change the caller's own password
+      description: Checks the current password and replaces it with a new one that satisfies the configured
+        policy. The account is read from the access token's subject rather than from the request, so a
+        caller can only ever change its own password.
+      operationId: changePassword
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+        required: true
+      responses:
+        '200':
+          description: Password replaced
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: Password changed.
+        '400':
+          description: 'Validation error: a password is missing or blank'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Missing, malformed or expired access token, or the current password is not correct
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: The account is blocked or inactive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '422':
+          description: The new password is well-formed but breaks the configured policy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+  /api/v1/auth/logout:
+    post:
+      tags:
+      - Authentication
+      summary: Sign out
+      description: 'Closes the named session. The session is closed, not revoked: walking away is not
+        a security event. The session is the one the login answered (idUserSession) and must belong to
+        the access token''s subject: another account''s session is answered 404, like an unknown one.
+        A cookie client also gets both cookies cleared.'
+      operationId: logout
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+        required: true
+      responses:
+        '200':
+          description: Session closed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: Session closed.
+        '400':
+          description: 'Validation error: the body carries no session identifier'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Missing, malformed or expired access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: No active session with that identifier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+  /api/v1/auth/login:
+    post:
+      tags:
+      - Authentication
+      summary: Sign in
+      description: 'Authenticates an email and password and returns a signed JWT access token together
+        with an opaque refresh token. Every rejection produces the same 401 with the same body on purpose:
+        telling the caller whether the address is unknown or the password wrong would turn this endpoint
+        into an account-enumeration oracle. With X-Session-Transport: cookie (the web app) both tokens
+        are set as HttpOnly cookies and come back null in the body.'
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+        required: true
+      responses:
+        '200':
+          description: Authenticated; tokens issued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+              example:
+                accessToken: eyJhbGciOiJSUzI1NiJ9...
+                refreshToken: 3f8c1d4e7a0b52c9...
+                tokenType: Bearer
+                expiresIn: 900
+                account:
+                  idUser: USR-1a2b3c4d5e
+                  idPerson: PER-9f8e7d6c5b
+                  email: ada@example.com
+                  status: ACTIVE
+                  lastLogin: '2026-10-05T14:31:00Z'
+                  profileImage: null
+        '400':
+          description: 'Validation error: the body is missing an email or a password'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: 'Authentication rejected: unknown address or wrong password, indistinguishable
+            to the caller'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: 'The password is right but the account has not verified its email address: the
+            client requests a code (/email/verification/resend) and confirms it (/email/verify) before
+            signing in'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/auth/google:
+    post:
+      tags:
+      - Authentication
+      summary: Sign in with Google
+      description: Exchanges the authorization code of Google's sign-in popup for the usual credentials.
+        The first time it creates the account with the name, last name, photo and address of the Google
+        account. An address that belongs to an account registered with a password is refused with 409.
+      operationId: loginWithGoogle
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleLoginRequest'
+        required: true
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid or expired code, or an address Google did not verify
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: The account is blocked or inactive
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: The address belongs to an account registered with a password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '503':
+          description: Google sign-in is not configured
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/auth/email/verify:
+    post:
+      tags:
+      - Authentication
+      summary: Verify the account's email
+      description: Checks the six-digit code sent to the address at registration and marks the address
+        as verified. An unknown address and a wrong or expired code produce the same 400, so the endpoint
+        cannot be used to learn which addresses are registered. Repeating it with a valid code is harmless.
+      operationId: verifyEmail
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyEmailRequest'
+        required: true
+      responses:
+        '200':
+          description: Email verified
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageResponse'
+              example:
+                message: Email verified.
+        '400':
+          description: Validation error, or the code is invalid or expired
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '429':
+          description: Too many attempts
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/auth/email/verification/resend:
+    post:
+      tags:
+      - Authentication
+      summary: Send a new verification code
+      description: Sends the current verification code again. Always answers 202 with an empty body, whether
+        or not the address is registered or already verified, for the same reason as the password-recovery
+        request.
+      operationId: resendVerification
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResendVerificationRequest'
+        required: true
+      responses:
+        '202':
+          description: Request accepted, empty body
+        '400':
+          description: 'Validation error: the body carries no email'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/auth/account/delete:
+    post:
+      tags:
+      - Authentication
+      summary: Delete the caller's own account
+      description: Confirms the current password, then soft-deletes the account and its person (deleted_at),
+        closes its sessions and drops its home memberships. A home the caller is the only member of is
+        deleted with it. Refused with 409 while the caller is the only owner of a home that still has
+        other members. The account is read from the access token's subject, so a caller can only delete
+        itself.
+      operationId: deleteAccount
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteAccountRequest'
+        required: true
+      responses:
+        '204':
+          description: Account deleted
+        '400':
+          description: 'Validation error: the password is missing'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Missing, malformed or expired access token, or the password is not correct
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: The caller is the only owner of a home that still has other members
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+  /api/v1/support/contacts:
+    get:
+      tags:
+      - support-controller
+      summary: Support contacts
+      description: Name and email address of every active administrator, sorted by name, for the support
+        page to write to. Public; an empty list when there is no administrator yet.
+      operationId: contacts
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SupportContactResponse'
+  /api/v1/auth/permissions:
+    get:
+      tags:
+      - Authentication
+      summary: List the caller's permission codes
+      description: Returns every permission code the caller currently holds, resolved through the enabled
+        roles assigned to the account. The identity is taken from the access token's subject rather than
+        from any request parameter, so a caller can only ask about itself. The list is sorted and free
+        of duplicates, and is empty rather than an error when the account holds no permission or cannot
+        authenticate.
+      operationId: getPermissions
+      responses:
+        '200':
+          description: Codes resolved; the list is empty when the caller holds no permission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PermissionsResponse'
+              example:
+                permissions:
+                - ALERT.READ
+                - METER.READ
+        '401':
+          description: Missing, malformed or expired access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: The token is valid but names an account that no longer exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+  /api/v1/auth/account:
+    get:
+      tags:
+      - Authentication
+      summary: Get the authenticated account
+      description: Returns the account of the caller, taken from the access token's subject rather than
+        from any request parameter. The response never contains the password hash or any session or persistence
+        detail.
+      operationId: getAccount
+      responses:
+        '200':
+          description: Account found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountResponse'
+              example:
+                idUser: USR-1a2b3c4d5e
+                idPerson: PER-9f8e7d6c5b
+                email: ada@example.com
+                status: ACTIVE
+                lastLogin: '2026-10-05T14:31:00Z'
+                profileImage: null
+                name: Ada
+                lastName: Lovelace
+        '401':
+          description: Missing, malformed or expired access token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: The token is valid but names an account that no longer exists; empty body
+      security:
+      - bearerAuth: []
+  /api/v1/admin/users:
+    get:
+      tags:
+      - Administration
+      summary: List accounts
+      description: Active accounts, newest first, optionally filtered by a text matched against the address,
+        name and last name. Requires USER.READ.
+      operationId: listUsers
+      parameters:
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        '200':
+          description: The page of accounts
+          content:
+            '*/*':
+              schema:
+                $ref: '#/components/schemas/AdminUserPageResponse'
+        '400':
+          description: Page or size out of range
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: The caller lacks USER.READ
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+      security:
+      - bearerAuth: []
+  /api/v1/admin/roles:
+    get:
+      tags:
+      - Administration
+      summary: List the global roles that can be granted
+      description: Requires USER.READ.
+      operationId: listRoles
+      responses:
+        '200':
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/SystemRoleResponse'
+      security:
+      - bearerAuth: []
+components:
+  schemas:
+    UpdateProfileRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 100
+          minLength: 0
+        lastName:
+          type: string
+          maxLength: 100
+          minLength: 0
+        profileImage:
+          type: string
+          maxLength: 500000
+          minLength: 0
+        newEmail:
+          type: string
+          format: email
+          maxLength: 255
+          minLength: 0
+    ProfileResponse:
+      type: object
+      properties:
+        idPerson:
+          type: string
+        name:
+          type: string
+        lastName:
+          type: string
+    ApiError:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+          format: int32
+        error:
+          type: string
+        message:
+          type: string
+        path:
+          type: string
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string
+    ChangeAccountStatusRequest:
+      type: object
+      description: The state to move the account to.
+      properties:
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - BLOCKED
+      required:
+      - status
+    RegisterRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 255
+          minLength: 0
+        password:
+          type: string
+          maxLength: 255
+          minLength: 0
+        name:
+          type: string
+          maxLength: 100
+          minLength: 0
+        lastName:
+          type: string
+          maxLength: 100
+          minLength: 0
+        profileImage:
+          type: string
+          maxLength: 255
+          minLength: 0
+      required:
+      - email
+      - lastName
+      - name
+      - password
+    AccountResponse:
+      type: object
+      properties:
+        idUser:
+          type: string
+        idPerson:
+          type: string
+        email:
+          type: string
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - BLOCKED
+        lastLogin:
+          type: string
+          format: date-time
+        profileImage:
+          type: string
+        name:
+          type: string
+        lastName:
+          type: string
+    RefreshRequest:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+          maxLength: 255
+          minLength: 0
+      required:
+      - refreshToken
+    RefreshResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+    ResetPasswordRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        resetToken:
+          type: string
+          minLength: 1
+          pattern: \d{6}
+        newPassword:
+          type: string
+          maxLength: 255
+          minLength: 0
+      required:
+      - email
+      - newPassword
+      - resetToken
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+    ForgotPasswordRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 255
+          minLength: 0
+      required:
+      - email
+    ChangePasswordRequest:
+      type: object
+      properties:
+        currentPassword:
+          type: string
+          maxLength: 255
+          minLength: 0
+        newPassword:
+          type: string
+          maxLength: 255
+          minLength: 0
+      required:
+      - currentPassword
+      - newPassword
+    LogoutRequest:
+      type: object
+      properties:
+        idUserSession:
+          type: string
+          maxLength: 10
+          minLength: 0
+      required:
+      - idUserSession
+    LoginRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 255
+          minLength: 0
+        password:
+          type: string
+          maxLength: 255
+          minLength: 0
+      required:
+      - email
+      - password
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        tokenType:
+          type: string
+        expiresIn:
+          type: integer
+          format: int64
+        account:
+          $ref: '#/components/schemas/AccountResponse'
+        idUserSession:
+          type: string
+    GoogleLoginRequest:
+      type: object
+      properties:
+        code:
+          type: string
+          maxLength: 2048
+          minLength: 0
+      required:
+      - code
+    VerifyEmailRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+          minLength: 1
+        code:
+          type: string
+          minLength: 1
+          pattern: \d{6}
+      required:
+      - code
+      - email
+    ResendVerificationRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 255
+          minLength: 0
+      required:
+      - email
+    DeleteAccountRequest:
+      type: object
+      properties:
+        password:
+          type: string
+          maxLength: 255
+          minLength: 0
+      required:
+      - password
+    SupportContactResponse:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+    PermissionsResponse:
+      type: object
+      description: The permission codes the authenticated caller holds.
+      properties:
+        permissions:
+          type: array
+          description: Stable permission codes granted through the caller's enabled roles, sorted and
+            without duplicates. Empty when the caller holds none.
+          example:
+          - ALERT.READ
+          - METER.READ
+          items:
+            type: string
+      required:
+      - permissions
+    AdminUserPageResponse:
+      type: object
+      description: A page of the user directory.
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/AdminUserResponse'
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalItems:
+          type: integer
+          format: int64
+    AdminUserResponse:
+      type: object
+      description: One account as the user directory shows it.
+      properties:
+        idUser:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        lastName:
+          type: string
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+          - BLOCKED
+        emailVerified:
+          type: boolean
+        registeredAt:
+          type: string
+          format: date-time
+        lastLoginAt:
+          type: string
+          format: date-time
+        roles:
+          type: array
+          description: Global roles held, sorted
+          example:
+          - ADMIN
+          items:
+            type: string
+    SystemRoleResponse:
+      type: object
+      description: A global role that can be granted.
+      properties:
+        name:
+          type: string
+          example: ADMIN
+        description:
+          type: string
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
