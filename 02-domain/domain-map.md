@@ -46,7 +46,7 @@ touching who is allowed to log in.
 | **Name** | Home Management |
 | **Responsibility** | Groups devices, members, and thresholds under a home, and manages who belongs to which home and with what role |
 | **Owning team** | Miguel Garcia |
-| **Microservice(s)** | None yet — module `home` of `energy-monitor-backend` (:8083); migration to a microservice in progress |
+| **Microservice(s)** | `en-monitor-home-service` (:8086) |
 | **Database** | Shared MySQL instance; owns the tables under the home domain |
 | **Ubiquitous Language** | `Home`, `Home Type`, `Access Code`, `Home Role`, `Threshold`, `Home Thresholds`. Full definitions in `01-context/glossary.md`. |
 
@@ -99,7 +99,7 @@ touching who is allowed to log in.
 | **Name** | Alerts |
 | **Responsibility** | Reacts to a measurement or a device going silent by raising and tracking an alert until it is resolved |
 | **Owning team** | Miguel Garcia |
-| **Microservice(s)** | None yet — module `alert` of `energy-monitor-backend`; migration to a microservice in progress |
+| **Microservice(s)** | `en-monitor-alert-service` (:8088) |
 | **Database** | Shared MySQL instance; owns the tables under the alerting domain |
 | **Ubiquitous Language** | `Alert`, `Alert Severity`, `Alert Type` (THRESHOLD, CONNECTIVITY, DEVICE, LIMIT), `Consumption Level` (consumed, not owned). Full definitions in `01-context/glossary.md`. |
 
@@ -112,7 +112,7 @@ touching who is allowed to log in.
 | **Name** | Recommendations |
 | **Responsibility** | Generates suggestions from a home's own measured consumption behavior, and tracks whether the user has read them |
 | **Owning team** | Juan Cortes |
-| **Microservice(s)** | None yet — module `recommendation` of `energy-monitor-backend`; migration to a microservice in progress |
+| **Microservice(s)** | `en-monitor-recommendation-service` (:8089) |
 | **Database** | Shared MySQL instance; owns the tables under the recommendation domain |
 | **Ubiquitous Language** | `Recommendation`, `Recommendation Type`, `Message Key`. Full definitions in `01-context/glossary.md`. |
 
@@ -125,7 +125,7 @@ touching who is allowed to log in.
 | **Name** | Notification |
 | **Responsibility** | Owns the delivery log: a record that an outbound message was attempted, over which channel, and whether it succeeded. Delivers alerts, recommendations, e-mail verification and password reset codes via email, Web Push (VAPID) and mobile push (Expo), plus in-app notices to administrators. |
 | **Owning team** | Miguel Garcia |
-| **Microservice(s)** | None yet — module `notification` of `energy-monitor-backend`; migration to a microservice in progress |
+| **Microservice(s)** | `en-monitor-notification-service` (:8087) |
 | **Database** | Shared MySQL instance; owns the tables under the notification domain |
 | **Ubiquitous Language** | `Notification`, `Notification Channel` (EMAIL, PUSH), `Notification Source Type` (ALERT, RECOMMENDATION, PASSWORD_RESET), `Notification Status` (PENDING, SENT, FAILED), `Push Subscription`. Full definitions in `01-context/glossary.md`. |
 
@@ -156,7 +156,7 @@ touching who is allowed to log in.
                     │  Alerts  │            │Recommendations │
                     └────┬─────┘            └───────┬────────┘
                          │                         │
-                         │  U → D (in-process Spring event)
+                         │  U → D (RabbitMQ `alert.raised` / `recommendation.created`)
                          ▼                         ▼
                     ┌────────────────────────────────────┐
                     │         Notification               │
@@ -165,9 +165,8 @@ touching who is allowed to log in.
                     └────────────────────────────────────┘
 ```
 
-> Deployment on 24-Oct-2026: Security, Devices and Monitoring and Measurements are
-> microservices; Home Management, Alerts, Recommendations and Notification run in
-> `energy-monitor-backend` (migration in progress). Channels are in the relationships table.
+> Deployment on 28-Oct-2026: every context is its own microservice (the modular monolith
+> `energy-monitor-backend` was retired). Channels are in the relationships table.
 >
 > This diagram draws the relationships that involve an active integration (an API call, a
 > token claim, or a domain event). `Alert` and `Recommendation` also store `homeId` and,
@@ -188,27 +187,27 @@ This project does not currently use Shared Kernel or Conformist relationships �
 
 ### Relationships table
 
-Channels as implemented on 24-Oct-2026. "In-process" means both contexts still run inside
-`energy-monitor-backend`; "internal REST" means `/internal/**` with `X-Internal-Token`; event
+Channels as implemented on 28-Oct-2026. "Internal REST" means `/internal/**` with `X-Internal-Token`; event
 names in `code` are RabbitMQ routing keys.
 
 | Context A | Relationship | Context B | Communication channel | Contract |
 |-----------|-------------|-----------|------------------------|---------|
 | Security | OHS / PL | Every other context | Access token validated locally with the public key (gateway and each service) | `sub` claim (user identity); no roles in the token |
-| Security | OHS / PL | Home Management | Internal REST `POST /internal/users/profiles`; RabbitMQ `account.deleted` | User profiles; clean-up of deleted accounts |
+| Security | OHS / PL | Home Management | Internal REST `POST /internal/users/profiles`; RabbitMQ `account.deleted` | User profiles (names and photos); clean-up of deleted accounts |
 | Home Management | U → D | Security | Internal REST `GET /internal/accounts/{id}/deletion-check` | May the account be deleted (204 / 409) |
-| Security | OHS / PL | Notification | RabbitMQ `account.registered`, `account.administered`, `mail.email-verification`, `mail.password-reset`; internal REST `GET /internal/administrators`, `GET /internal/users/{id}/permissions` | Administrator notices and e-mail delivery |
-| Home Management | U → D | Devices | Internal REST `GET /internal/homes/{homeId}/access` (device → backend); RabbitMQ `home.deleted` | Membership/ownership check; unlink the modules of a deleted home |
-| Home Management | U → D | Monitoring and Measurements | Internal REST `GET /internal/homes/{homeId}/access`, `GET /internal/homes/{homeId}/thresholds` | Membership check; limits of the consumption summary |
+| Security | OHS / PL | Notification | RabbitMQ `account.registered`, `account.administered`, `account.deleted`, `account.first-signed-in`, `mail.email-verification`, `mail.password-reset`, `mail.account-deletion`; internal REST `POST /internal/users/profiles`, `GET /internal/administrators`, `GET /internal/users/{id}/permissions` | Administrator notices, welcome and e-mail delivery |
+| Home Management | U → D | Devices | Internal REST `GET /internal/homes/{homeId}/access` (device → home); RabbitMQ `home.deleted` | Membership/ownership check; unlink the modules of a deleted home |
+| Home Management | U → D | Monitoring and Measurements, Alerts, Recommendations | Internal REST `GET /internal/homes/{homeId}/access`, `GET /internal/homes/{homeId}/thresholds` | Membership check; limits of the consumption summary and of the limit alerts and recommendations |
+| Home Management | U → D | Notification | Internal REST `GET /internal/homes/{homeId}`; RabbitMQ `home.created`, `home.member-joined`, `home.member-left`, `home.member-removed`, `home.thresholds-updated`, `home.ownership-transferred`, `home.deleted` | Name and members of a home; activity notifications |
 | Devices | U → D | Monitoring and Measurements | MQTT (module → broker, authenticated by the device service); internal REST `GET /internal/devices/{id}`, `GET /internal/homes/{homeId}/devices`; RabbitMQ `device.linked`, `device.unlinked` | Readings are stored only for a known device; cache invalidation |
-| Monitoring and Measurements | U → D | Alerts | RabbitMQ `measurement.recorded`, republished in memory as `MeasurementRecorded`; internal REST `GET /internal/consumption-levels`, `GET /internal/measurements/hourly-energy` | Threshold, limit and "device linked" alerts |
+| Monitoring and Measurements | U → D | Alerts | RabbitMQ `measurement.recorded`; internal REST `GET /internal/consumption-levels`, `GET /internal/measurements/hourly-energy` | Threshold, limit, unusual-consumption and "device linked" alerts |
 | Monitoring and Measurements | U → D | Recommendations | Internal REST `GET /internal/measurements/hourly-energy`, `GET /internal/measurements/reporting-devices` | Hourly energy per device |
-| Devices | U → D | Alerts | RabbitMQ `device.connectivity-lost`, `device.connectivity-restored`, republished in memory as `DeviceConnectivityLost/Restored` | CONNECTIVITY alerts |
-| Devices | U → D | Recommendations, Notification, Alerts | Internal REST `GET /internal/devices/{id}`, `GET /internal/homes/{homeId}/devices` (through the backend's `device` proxy, cached) | `deviceId` as a foreign reference |
-| Home Management | U → D | Alerts, Recommendations, Notification | In-process (`home::api`) | `homeId` as a foreign reference |
-| Alerts | U → D | Notification | In-process Spring event `AlertRaised` | See `domain-events.md` |
-| Recommendations | U → D | Notification | In-process Spring event `RecommendationCreated` | See `domain-events.md` |
-| Home Management | ACL | Security | `UserDirectoryPort` (outbound port), answered by the backend's `security` proxy | Translates Security's `User` to Home's `UserProfile` |
+| Devices | U → D | Alerts | RabbitMQ `device.connectivity-lost`, `device.connectivity-restored`, `device.linked` | CONNECTIVITY alerts and linked-device alert |
+| Devices | U → D | Notification | RabbitMQ `device.linked`, `device.unlinked` | Activity notifications |
+| Devices | U → D | Recommendations, Notification, Alerts | Internal REST `GET /internal/devices/{id}`, `GET /internal/homes/{homeId}/devices` (cached) | `deviceId` as a foreign reference |
+| Alerts | U → D | Notification | RabbitMQ `alert.raised` | See `domain-events.md` |
+| Recommendations | U → D | Notification | RabbitMQ `recommendation.created` | See `domain-events.md` |
+| Home Management | ACL | Security | `UserDirectoryPort` (outbound port), answered by an HTTP client of the security service's internal API | Translates Security's `User` to Home's `UserProfile` |
 
 No context reads another context's database tables directly, even though the physical database
 is shared. Every relationship above goes through an API call, a token claim, or a domain event.
@@ -253,7 +252,7 @@ project's own commit history) before it was translated into this format.
 | Keep Devices separate from Monitoring and Measurements | Merge them into one context, since a device's only purpose is to produce measurements | Device lifecycle (registration, connectivity, hardware association) changes independently from measurement ingestion, which is high-volume and append-only. They also fail independently: a device can go offline without any measurement being lost, and vice versa |
 | Keep Alerts and Recommendations as two contexts instead of one shared "Notifications" context | Merge them, since both react to the same measurement stream | They have different lifecycles (`PENDING`/`RESOLVED` vs. `READ`/`UNREAD`) and are triggered by different logic — a threshold crossing versus a behavioral pattern. `Notification` remains a separate context for the delivery infrastructure (email/push), not the business logic of alerting or recommending |
 | Separate `HomeThresholds` as its own aggregate (1:1 with `Home`) | Embed thresholds inside `Home` aggregate | Thresholds have their own lifecycle invariants (HOME-INV-005/006/007) and persistence row. The use case `UpdateHomeThresholdsService` orchestrates both aggregates. |
-| Make `DeviceConnectivityRestored` an explicit domain event | Only have `DeviceConnectivityLost` and rely on manual resolution | The firmware and backend detect reconnection automatically; publishing a symmetric event enables auto-resolution of connectivity alerts and avoids manual intervention. |
+| Make `DeviceConnectivityRestored` an explicit domain event | Only have `DeviceConnectivityLost` and rely on manual resolution | The firmware and the device service detect reconnection automatically; publishing a symmetric event enables auto-resolution of connectivity alerts and avoids manual intervention. |
 | Use `messageKey` instead of storing message text in Alert/Recommendation/Notification | Store literal message text in each entity | Enables i18n without schema changes; the same alert/recommendation can be rendered in any supported language. The message catalog lives in the frontends. |
 
 ---
@@ -264,8 +263,8 @@ project's own commit history) before it was translated into this format.
 |------------------------------|------------------------|------------|
 | `domain-map.md` listed 6 bounded contexts | Backend has 7 modules; `Notification` was missing | Added Notification as 7th bounded context |
 | `domain-map.md` showed Kafka for domain events | Current implementation uses Spring Modulith in-process events; Kafka is planned for microservice extraction | Updated diagram and table to reflect Spring Modulith; noted Kafka as future transport |
-| Kafka as the future transport (`ADR-002`) | Since the extractions of October 2026 events between services go over RabbitMQ with a transactional outbox (`ADR-008`); Spring events remain only inside the backend | Relationships table updated (24-Oct-2026) |
-| Every context mapped to its own `*-service` | Security, Devices and Monitoring/Measurements are microservices; Home Management, Alerts, Recommendations and Notification still run in `energy-monitor-backend` | "Microservice(s)" rows and migration notes updated (24-Oct-2026) |
+| Kafka as the future transport (`ADR-002`) | Since the extractions of October 2026 events between services go over RabbitMQ with a transactional outbox (`ADR-008`); there are no in-process events left since the monolith was retired (28-Oct-2026) | Relationships table updated (24-Oct-2026) |
+| Every context mapped to its own `*-service` | Every context is a microservice since 28-Oct-2026; `energy-monitor-backend` was retired | "Microservice(s)" rows and migration notes updated (28-Oct-2026) |
 | `consumption_level` listed under Alerts | Owned by the measurement service (`measurement-002`) | Ownership corrected in `06-data/models.md` |
 | `domain-events.md` listed only 2 events | Code has 7+ domain events across all contexts | Added all events: `MeasurementRecorded`, `DeviceConnectivityLost`, `DeviceConnectivityRestored`, `DeviceLinked`, `DeviceUnlinked`, `DeviceRegistered`, `AlertRaised`, `RecommendationCreated`, `AccountDeleted` |
 | `domain-map.md` showed `Devices` → `Alerts` via Kafka | Implementation uses Spring Modulith events | Updated to Spring Modulith |
@@ -294,23 +293,23 @@ project's own commit history) before it was translated into this format.
 
 ## 8. Migration notes: from modular monolith to microservices
 
-Every bounded context started as a Spring Modulith module of `energy-monitor-backend`. Status on
-24-Oct-2026:
+Every bounded context started as a Spring Modulith module of `energy-monitor-backend`. The
+migration finished on 28-Oct-2026:
 
 | Context | Status | Data ownership | Async communication | Sync communication | Notes |
 |---------|--------|----------------|---------------------|--------------------|-------|
-| **Security** | ✅ Extracted — `en-monitor-security-service` (:8082), in production | `person`, `user`, `user_configuration`, `user_session`, `refresh_token`, `password_reset_token`, `password_policy`, `security_configuration`, `login_error_log`, RBAC tables, `audit_log`, `security_outbox` | Publishes `account.*`, `mail.*` (`energy-monitor.security`) | Serves `/internal/users/{id}/permissions`, `/internal/users/profiles`, `/internal/administrators`; calls `/internal/accounts/{id}/deletion-check` | Only holder of the JWT private key; the backend keeps a `security` proxy package |
-| **Devices** | ✅ Extracted — `en-monitor-device-service` (:8084), in production | `appliance_type`, `device`, `device_home`, `device_status_log`, `device_outbox` | Publishes `device.*` (`energy-monitor.device`); consumes `home.deleted` | Serves `/internal/devices/**`, `/internal/homes/{homeId}/devices`, `/internal/mqtt/auth/**`; calls `/internal/homes/{homeId}/access` | Owns MQTT authentication, commands and connectivity; the backend keeps a cached `device` proxy |
-| **Monitoring and Measurements** | ✅ Extracted — `en-monitor-measurement-service` (:8085), in production | `measurement`, `consumption_level`, `measurement_outbox` | Publishes `measurement.recorded` (`energy-monitor.measurement`); consumes `device.linked/unlinked` | Serves `/internal/consumption-levels`, `/internal/measurements/**`; calls the backend (access, thresholds) and the device service | Only subscriber that stores telemetry; the backend keeps a `measurement` proxy and is no longer an MQTT client |
-| **Home Management** | 🟡 In the monolith — migration in progress (teammate) | `home`, `home_type`, `home_thresholds`, `user_home`, `home_outbox` | Publishes `home.deleted` (`energy-monitor.home`); consumes `account.deleted` | Serves `/internal/homes/{homeId}/access`, `/internal/homes/{homeId}/thresholds`, `/internal/accounts/{id}/deletion-check` | — |
-| **Alerts** | 🟡 In the monolith — migration in progress (teammate) | `alert` | Consumes `measurement.recorded`, `device.connectivity-*` (through the proxies) | Reads levels and hourly energy from the measurement service | — |
-| **Recommendations** | 🟡 In the monolith — migration in progress (teammate) | `recommendation` | — | Reads hourly energy and reporting devices from the measurement service, devices from the device service | — |
-| **Notification** | 🟡 In the monolith — migration in progress (teammate) | `notification`, `notification_preference`, `push_subscription`, `push_device` | Consumes `account.registered`, `account.administered`, `mail.*` | Reads profiles and administrators from the security service | Only component that sends e-mail; Web Push (VAPID) and Expo push |
+| **Security** | ✅ `en-monitor-security-service` (:8082) | `person`, `user`, `user_configuration`, `user_session`, `refresh_token`, `password_reset_token`, `password_policy`, `security_configuration`, `login_error_log`, RBAC tables, `audit_log`, `pending_registration`, `security_outbox` | Publishes `account.*`, `mail.*` (`energy-monitor.security`) | Serves `/internal/users/{id}/permissions`, `/internal/users/profiles`, `/internal/administrators` | Only holder of the JWT private key |
+| **Devices** | ✅ `en-monitor-device-service` (:8084) | `appliance_type`, `device`, `device_home`, `device_status_log`, `device_outbox` | Publishes `device.*` (`energy-monitor.device`); consumes `home.deleted` | Serves `/internal/devices/**`, `/internal/homes/{homeId}/devices`, `/internal/mqtt/auth/**`; calls the home service for access | Owns MQTT authentication, commands and connectivity |
+| **Monitoring and Measurements** | ✅ `en-monitor-measurement-service` (:8085) | `measurement`, `consumption_level`, `measurement_outbox` | Publishes `measurement.recorded` (`energy-monitor.measurement`); consumes `device.linked/unlinked` | Serves `/internal/consumption-levels`, `/internal/measurements/**`; calls the home and device services | Only subscriber that stores telemetry |
+| **Home Management** | ✅ `en-monitor-home-service` (:8086) | `home`, `home_type`, `home_thresholds`, `user_home`, `home_outbox` | Publishes `home.*` (`energy-monitor.home`); consumes `account.deleted` | Serves `/internal/homes/**`, `/internal/accounts/{id}/deletion-check`; calls the security service for profiles | Owns membership and roles of every home |
+| **Alerts** | ✅ `en-monitor-alert-service` (:8088) | `alert`, `alert_outbox` | Publishes `alert.raised` (`energy-monitor.alert`); consumes `measurement.recorded`, `device.*` | Reads levels and hourly energy from the measurement service; home and devices from their owners | Includes the unusual-consumption rule |
+| **Recommendations** | ✅ `en-monitor-recommendation-service` (:8089) | `recommendation`, `recommendation_outbox` | Publishes `recommendation.created` (`energy-monitor.recommendation`) | Reads hourly energy and reporting devices from the measurement service, devices from the device service, home and limits from the home service | Evaluates every hour |
+| **Notification** | ✅ `en-monitor-notification-service` (:8087) | `notification`, `notification_preference`, `push_subscription`, `push_device` | Consumes `account.*`, `mail.*`, `home.*`, `device.linked/unlinked`, `alert.raised`, `recommendation.created` | Reads profiles, permissions and administrators from the security service, homes from the home service | Only component that sends e-mail; Web Push (VAPID) and Expo push |
 
-The four remaining contexts are being migrated by Miguel Ángel García Artunduaga; their service
-names, ports and order are not defined yet.
+The last four extractions were carried out by Miguel Ángel García Artunduaga between 25 and
+28-Oct-2026.
 
-**How the three extractions were done** (the pattern the remaining ones can follow — see the
+**How the extractions were done** (the pattern to follow for any new service — see the
 `docs/Architecture.md` of each service repository):
 1. Move the module to its own repository with its package, tests and Liquibase changelogs, keeping
    the changelog paths unchanged (`ADR-009`).
@@ -318,7 +317,8 @@ names, ports and order are not defined yet.
 3. Expose `/internal/**` endpoints for what other contexts must ask, protected by network and
    `X-Internal-Token`.
 4. Remove the module from `energy-monitor-backend`, leaving a proxy package that keeps its `api`
-   (HTTP client with cache, events republished in memory).
+   (HTTP client with cache, events republished in memory); the proxy packages disappeared with
+   the last extraction.
 5. Add the gateway routes (most specific first) so the clients keep calling the same paths.
 6. Add the container to the infra Compose files, its CI/CD workflow and its `deploy.sh` target;
    check the whole stack end to end.
