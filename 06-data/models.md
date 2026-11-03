@@ -7,7 +7,7 @@
 This project does **not** follow a database-per-service model. It uses **one physical MySQL
 instance, organized logically by bounded context** — a deliberate architectural decision (see
 `Shared Database` in `01-context/glossary.md`), formalized in `ADR-003-shared-database.md`
-(`05-architecture/decisions/records/`) and in production since 24-Oct-2026 as MySQL 8.4, schema
+(`05-architecture/decisions/records/`) and in production since 24-Oct-2026 (shared by eight services since 28-Oct-2026) as MySQL 8.4, schema
 `energy_monitor`. Each component has read/write access only to the tables it owns; no service directly queries or joins another service's
 tables. What this avoids is the `Distributed Monolith` anti-pattern (also defined in the
 glossary): a service reaching into another service's tables instead of requesting that data
@@ -16,8 +16,8 @@ through an API or a domain event.
 ```
 ✓ en-monitor-security-service → Security tables (same physical MySQL instance)
 ✓ en-monitor-measurement-service needs home data → GET /internal/homes/{homeId}/access and
-  /thresholds on energy-monitor-backend, or already has the id as a stored reference
-✗ en-monitor-measurement-service JOINs directly against the backend's home table
+  /thresholds on the home service, or already has the id as a stored reference
+✗ en-monitor-measurement-service JOINs directly against the home service's home table
 ```
 
 **Cross-context foreign keys are intentionally not enforced at the database level.** A column
@@ -26,7 +26,7 @@ declared for it in SQL, even though the referenced table lives in the same physi
 Two reasons:
 
 1. A real FK constraint would force one service's migrations to always run after another's
-   (for example the backend's `alert` after `home`, or the measurement service after the device
+   (for example the alert service after the home service, or the measurement service after the device
    service), and would hard-block ever separating the databases physically later — an
    option this project's architecture deliberately keeps open (see `01-context/glossary.md`).
 2. It keeps each service's own migration history self-contained: each component keeps its
@@ -42,28 +42,28 @@ table below without exception.
 
 ---
 
-## Table ownership (24-Oct-2026)
+## Table ownership (28-Oct-2026)
 
 | Owner (component) | Bounded context | Tables | Changesets |
 |---|---|---|---|
-| `en-monitor-security-service` | Security | `person`, `user`, `user_configuration`, `user_session`, `refresh_token`, `password_reset_token`, `password_policy`, `security_configuration`, `login_error_log`, `system_role`, `permission`, `system_role_permission`, `user_system_role`, `audit_log`, `security_outbox` | `security-001` … `security-027` |
+| `en-monitor-security-service` | Security | `person`, `user`, `user_configuration`, `user_session`, `refresh_token`, `password_reset_token`, `password_policy`, `security_configuration`, `login_error_log`, `system_role`, `permission`, `system_role_permission`, `user_system_role`, `audit_log`, `pending_registration`, `security_outbox` | `security-001` … `security-030` |
 | `en-monitor-device-service` | Devices | `appliance_type`, `device`, `device_home`, `device_status_log`, `device_outbox` | `device-001` … `device-009` |
 | `en-monitor-measurement-service` | Monitoring and Measurements | `measurement`, `consumption_level`, `measurement_outbox` | `measurement-001` … `measurement-004` |
-| `energy-monitor-backend` (`home`) | Home Management | `home`, `home_type`, `home_thresholds`, `user_home`, `home_outbox` | `home-001` … `home-007` |
-| `energy-monitor-backend` (`alert`) | Alerts | `alert` | `alert-001` … `alert-003` |
-| `energy-monitor-backend` (`recommendation`) | Recommendations | `recommendation` | `recommendation-001` |
-| `energy-monitor-backend` (`notification`) | Notification | `notification`, `notification_preference`, `push_subscription`, `push_device` | `notification-001` … `notification-005` |
+| `en-monitor-home-service` | Home Management | `home`, `home_type`, `home_thresholds`, `user_home`, `home_outbox` | `home-001` … `home-007` |
+| `en-monitor-alert-service` | Alerts | `alert`, `alert_outbox` | `alert-001` … `alert-004` |
+| `en-monitor-recommendation-service` | Recommendations | `recommendation`, `recommendation_outbox` | `recommendation-001`, `recommendation-002` |
+| `en-monitor-notification-service` | Notification | `notification`, `notification_preference`, `push_subscription`, `push_device` | `notification-001` … `notification-007` |
 
-Home Management, Alerts, Recommendations and Notification are being migrated out of
-`energy-monitor-backend` (in progress); their tables keep the same owner context when that
-happens. The `refresh_token` table, the four `*_outbox` tables and the notification tables are not
+The tables of Home Management, Alerts, Recommendations and Notification belonged to the retired
+`energy-monitor-backend` modular monolith and keep the same owner context in their new services.
+The `refresh_token` table, the six `*_outbox` tables and the notification tables are not
 detailed column by column below; their changesets are the reference.
 
 ## Outbox tables
 
 Every event producer has one transactional outbox table (`ADR-008`), written in the same
 transaction as the change it announces and read by a relay that publishes to RabbitMQ every
-second. The four tables have the same columns:
+second. The six tables have the same columns:
 
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
@@ -79,11 +79,13 @@ second. The four tables have the same columns:
 | Table | Owner | Changeset | Exchange | Particularities |
 |---|---|---|---|---|
 | `security_outbox` | security service | `security-026` | `energy-monitor.security` | Extra `expires_at` column: a mail request expires with its code; its payload is erased once confirmed |
-| `home_outbox` | backend (`home`) | `home-007` | `energy-monitor.home` | — |
+| `home_outbox` | home service | `home-007` | `energy-monitor.home` | — |
 | `device_outbox` | device service | `device-009` | `energy-monitor.device` | — |
 | `measurement_outbox` | measurement service | `measurement-004` | `energy-monitor.measurement` | One row per reading; published and discarded rows purged after 7 days |
+| `alert_outbox` | alert service | `alert-004` | `energy-monitor.alert` | — |
+| `recommendation_outbox` | recommendation service | `recommendation-002` | `energy-monitor.recommendation` | — |
 
-All four have an index on (`published_at`, `discarded_at`, `occurred_at`) for the relay;
+All six have an index on (`published_at`, `discarded_at`, `occurred_at`) for the relay;
 `measurement_outbox` also indexes `discarded_at` for the purge.
 
 
@@ -513,7 +515,7 @@ CREATE TABLE audit_log (
 
 ## Bounded Context: Home Management
 
-**Owning component:** module `home` of `energy-monitor-backend` (migration to a microservice in progress) (`02-domain/domain-map.md`)
+**Owning component:** `en-monitor-home-service` (`02-domain/domain-map.md`)
 
 **DB Engine:** MySQL 8.4 — schema **shared** with every other component (`ADR-003-shared-database.md`). Its owner has read/write access only to the tables listed in this section; no other component accesses them directly.
 
@@ -839,7 +841,7 @@ CREATE TABLE consumption_level (
 
 ## Bounded Context: Alerts
 
-**Owning component:** module `alert` of `energy-monitor-backend` (migration to a microservice in progress) (`02-domain/domain-map.md`)
+**Owning component:** `en-monitor-alert-service` (`02-domain/domain-map.md`)
 
 **DB Engine:** MySQL 8.4 — schema **shared** with every other component (`ADR-003-shared-database.md`). Its owner has read/write access only to the tables listed in this section; no other component accesses them directly.
 
@@ -886,7 +888,7 @@ CREATE TABLE alert (
 
 ## Bounded Context: Recommendations
 
-**Owning component:** module `recommendation` of `energy-monitor-backend` (migration to a microservice in progress) (`02-domain/domain-map.md`)
+**Owning component:** `en-monitor-recommendation-service` (`02-domain/domain-map.md`)
 
 **DB Engine:** MySQL 8.4 — schema **shared** with every other component (`ADR-003-shared-database.md`). Its owner has read/write access only to the tables listed in this section; no other component accesses them directly.
 
