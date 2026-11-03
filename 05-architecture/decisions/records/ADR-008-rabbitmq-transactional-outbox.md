@@ -39,12 +39,14 @@ its own part of the schema.
 
 | Exchange | Outbox table (producer) | Routing keys |
 |---|---|---|
-| `energy-monitor.security` | `security_outbox` (security service) | `account.registered`, `account.administered`, `account.deleted`, `mail.email-verification`, `mail.password-reset` |
-| `energy-monitor.home` | `home_outbox` (backend) | `home.deleted` |
+| `energy-monitor.security` | `security_outbox` (security service) | `account.registered`, `account.administered`, `account.deleted`, `account.first-signed-in`, `mail.email-verification`, `mail.password-reset`, `mail.account-deletion` |
+| `energy-monitor.home` | `home_outbox` (home service) | `home.created`, `home.member-joined`, `home.member-left`, `home.member-removed`, `home.thresholds-updated`, `home.ownership-transferred`, `home.deleted` |
 | `energy-monitor.device` | `device_outbox` (device service) | `device.linked`, `device.unlinked`, `device.connectivity-lost`, `device.connectivity-restored` |
 | `energy-monitor.measurement` | `measurement_outbox` (measurement service) | `measurement.recorded` |
+| `energy-monitor.alert` | `alert_outbox` (alert service) | `alert.raised` |
+| `energy-monitor.recommendation` | `recommendation_outbox` (recommendation service) | `recommendation.created` |
 
-How it works in all four producers:
+How it works in all six producers (the notification service has no outbox: it only consumes):
 
 - The outbox row is written **in the same database transaction** as the change it announces.
 - A relay publishes the pending rows **every second, oldest first**. A row counts as published
@@ -54,10 +56,10 @@ How it works in all four producers:
   tolerate duplicates.
 - Consumers declare their own **durable queues**, each with a dead-letter queue, and a message
   that fails three attempts goes to the dead-letter queue.
-- Events between modules that still share the backend process (`AlertRaised`,
-  `RecommendationCreated`, `HomeOwnershipTransferred`) stay Spring in-memory events. The backend's
-  proxy packages republish `measurement.recorded` and `device.connectivity-*` in memory as
-  `MeasurementRecorded` and `DeviceConnectivityLost/Restored` for the `alert` module.
+- While the backend was still a monolith, the events between its modules (`AlertRaised`,
+  `RecommendationCreated`, `HomeOwnershipTransferred`) were Spring in-memory events. When the
+  monolith was retired (28-Oct-2026) they became `alert.raised`, `recommendation.created` and
+  `home.ownership-transferred` on RabbitMQ, with the same outbox.
 
 **Justification:** the outbox gives the one guarantee the extraction needed: a change is never
 committed without its message, and a rolled-back change never sends one. RabbitMQ instead of the

@@ -9,7 +9,7 @@
 ## Standard logging
 
 **Not decided as a project-wide standard.** No service has its own Logback configuration or a
-log-shipping setup: all five Java components (gateway, security, device, measurement, backend)
+log-shipping setup: all eight Java components (gateway and the seven services)
 log with the Spring Boot defaults, and logs are read with `docker compose logs <service>`
 (`10-devops/local-setup.md`). There is no log aggregation tool.
 
@@ -112,11 +112,12 @@ and a defined answer when the other side does not respond:
 
 | Caller → callee | Cache | When the callee does not answer |
 |---|---|---|
-| backend → security (permissions, administrators / profiles) | 30 s / 60 s | Names left out, alert mail skipped (push still goes), backend admin routes answer 503 |
-| security → backend (deletion check) | — | 1 s to connect, 2 s to read; the deletion is refused with 503 |
-| backend → device, measurement → device | 30 s, unknown devices included | Stale copy served up to 1 h; with nothing kept, 503 (a reading is dropped) |
-| backend → measurement (consumption levels / energy) | 10 min, stale copy up to 24 h / never cached | Service-specific "unavailable" exception |
-| device → backend, measurement → backend (home access) | Never cached | 503 |
+| notification → security (permissions, administrators / profiles), home → security (profiles) | 30 s / 60 s | Names left out, alert mail skipped (push still goes), administrator notice routes answer 503 |
+| security → home (deletion check) | — | 1 s to connect, 2 s to read; the deletion is refused with 503 |
+| measurement, alert, recommendation, notification → device | 30 s, unknown devices included | Stale copy served up to 1 h; with nothing kept, 503 (a reading is dropped) |
+| alert, recommendation → measurement (consumption levels / energy) | Levels cached 10 min, stale copy up to 24 h; energy never cached | Service-specific "unavailable" exception |
+| device, measurement, alert, recommendation → home (home access) | Never cached | 503 |
+| notification → home (name and members) | — | Not documented in this repository yet (see the service's README) |
 | gateway → any service | — | 2 s to connect, 30 s to read; 503 or 504 |
 | Mosquitto → device (MQTT auth/ACL) | 5 min per decision | New MQTT logins refused while the device service is down |
 

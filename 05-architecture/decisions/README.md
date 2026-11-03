@@ -32,7 +32,7 @@ ADRs document important architectural decisions. Each file = one decision.
 | ADR-010 | Session Tokens and the Web Session in HttpOnly Cookies | Accepted | 2026-10-24 |
 | ADR-011 | MQTT Broker Authentication Delegated to the Device Context | Accepted | 2026-10-08 |
 | ADR-012 | Internal REST API Between Services | Accepted | 2026-10-20 |
-| ADR-013 | Modular Monolith First, Incremental Extraction to Microservices | Accepted | 2026-09-23 |
+| ADR-013 | Modular Monolith First, Incremental Extraction to Microservices | Accepted (carried out 2026-10-28) | 2026-09-23 |
 
 > Implementation status at 24-Oct-2026: every ADR in force (001, 003, 004, 007 to 013) is implemented
 > and in production. ADR-002, ADR-005 and ADR-006 stay in `records/` with status "Superseded",

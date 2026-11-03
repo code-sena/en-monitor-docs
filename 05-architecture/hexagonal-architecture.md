@@ -6,9 +6,11 @@
 > What matters is the business logic, which lives at the center.
 
 > **Stack note:** every backend component in this project is built on **Java 21 + Spring Boot**
-> (`01-context/overview.md`): the three microservices `en-monitor-security-service`,
-> `en-monitor-device-service` and `en-monitor-measurement-service`, and the modules `home`,
-> `alert`, `recommendation` and `notification` of the `energy-monitor-backend` modular monolith.
+> (`01-context/overview.md`): the seven microservices `en-monitor-security-service`,
+> `en-monitor-device-service`, `en-monitor-measurement-service`, `en-monitor-home-service`,
+> `en-monitor-notification-service`, `en-monitor-alert-service` and
+> `en-monitor-recommendation-service` (the last four were modules of the retired
+> `energy-monitor-backend` modular monolith).
 > Each of them is organised in these layers (`domain`, `application`, `adapter`,
 > `infrastructure`, plus `api` for what other contexts may use). `en-monitor-api-gateway` has no
 > domain and is organised by concern instead (`routing`, `security`, `ratelimit`, `error`). There is no second stack to support, so
@@ -62,7 +64,7 @@ you need to simulate the database.
 
 ## Folder structure — generic, for any service
 
-This is the reference shape for every service and backend module in this project. Replace `Xxx`
+This is the reference shape for every service in this project. Replace `Xxx`
 with the aggregate or concept the service owns. The real services differ from it in the places
 listed under "Concrete example" below.
 
@@ -150,20 +152,19 @@ com.energymonitor.security
 │       ├── persistence     → JPA entities, Spring Data repositories, mappers, *PersistenceAdapter
 │       ├── security        → BCrypt, token generation and hashing, Google OAuth client
 │       ├── messaging       → Transactional outbox, relay and RabbitMQ publisher
-│       ├── backend         → Client of energy-monitor-backend's internal API (deletion check)
+│       ├── home            → Client of the home service's internal API (deletion check)
 │       └── dns             → E-mail domain check
 └── infrastructure          → Spring wiring (SecurityApplicationWiring), filter chain, JWT
                               (JwtTokenIssuer), CORS, RBAC authorization, configuration properties
 ```
 
-The device and measurement services follow the same layers (`com.energymonitor.device`,
-`com.energymonitor.measurement`), with extra inbound adapters for MQTT, RabbitMQ consumers,
-schedulers and the internal API. In `energy-monitor-backend` each module (`home`, `alert`,
-`recommendation`, `notification`) has the same layers inside its own top-level package, and
-`ModularityTests` (Spring Modulith) fails the build when a module reaches past another module's
-`api`. The `security`, `device` and `measurement` packages left in the backend are thin proxies
-(`api`, `adapter/out/remote`, `adapter/in/messaging`, `infrastructure`) with no domain and no
-tables.
+The other six services follow the same layers (`com.energymonitor.device`, `.measurement`, `.home`,
+`.notification`, `.alert`, `.recommendation`), with extra inbound adapters for MQTT, RabbitMQ
+consumers, schedulers and the internal API. While the four last contexts were modules of the
+`energy-monitor-backend` modular monolith, `ModularityTests` (Spring Modulith) failed the build
+when a module reached past another module's `api`, and the `security`, `device` and `measurement`
+packages left in the backend were thin proxies; both disappeared when the monolith was retired
+(28-Oct-2026), and the boundary between contexts is now the network.
 
 > **Names used in the examples below.** The examples in the rest of this document were written
 > against an earlier design and keep its illustrative names. In the code: `AuthenticateUserUseCase`
@@ -197,8 +198,7 @@ public class RegisterUserService implements RegisterUser { ... }
 ```
 
 An earlier version of this document described the opposite convention (an empty `port/in` and
-`@Service` use cases injected directly); the code in all three microservices and in the backend
-modules uses the interfaces described here.
+`@Service` use cases injected directly); the code in all the services uses the interfaces described here.
 
 **Example (`en-monitor-security-service`):** `AuthController` depends on the `RegisterUser`
 interface (and the other `port/in` interfaces it needs); `RegisterUserService` implements it.
@@ -424,7 +424,7 @@ adapter/ (infrastructure) → application/ → domain/
 ```
 
 Concretely: `domain/model/Xxx.java` never imports `jakarta.persistence.*`,
-`org.springframework.*`, or anything from `adapter/`, in any service or backend module. If a domain
+`org.springframework.*`, or anything from `adapter/`, in any service. If a domain
 class needs an `@Entity` annotation to compile, that class is not in `domain/` — it belongs in
 `adapter/out/persistence/entity/`. **Example (`security-service`):** `domain/model/User.java`
 imports nothing from Spring or JPA — the `@Entity` annotation lives on `UserEntity` instead, in
