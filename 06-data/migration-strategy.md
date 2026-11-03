@@ -11,12 +11,15 @@ table lives in the same MySQL 8.4 schema (`ADR-003`). This mirrors the rule in
 `06-data/modeling-conventions.md`: a domain never reaches into another domain's tables, whether
 through a foreign key, a query, or a migration.
 
-| Component | Changelog folder | Changesets (24-Oct-2026) |
+| Component | Changelog folder | Changesets (28-Oct-2026) |
 |---|---|---|
-| `en-monitor-security-service` | `db/changelog/security/` | `security-001` … `security-027` |
+| `en-monitor-security-service` | `db/changelog/security/` | `security-001` … `security-030` |
 | `en-monitor-device-service` | `db/changelog/device/` | `device-001` … `device-009` |
 | `en-monitor-measurement-service` | `db/changelog/measurement/` | `measurement-001` … `measurement-004` |
-| `energy-monitor-backend` | `db/changelog/home/`, `alert/`, `recommendation/`, `notification/` | `home-001` … `home-007`, `alert-001` … `alert-003`, `recommendation-001`, `notification-001` … `notification-005` |
+| `en-monitor-home-service` | `db/changelog/home/` | `home-001` … `home-007` |
+| `en-monitor-notification-service` | `db/changelog/notification/` | `notification-001` … `notification-007` |
+| `en-monitor-alert-service` | `db/changelog/alert/` | `alert-001` … `alert-004` |
+| `en-monitor-recommendation-service` | `db/changelog/recommendation/` | `recommendation-001`, `recommendation-002` |
 
 - All components share the one `DATABASECHANGELOG` table; each applies only its own changelogs.
 - Liquibase identifies a changeset by id, author **and file path**. When a context moved to its own

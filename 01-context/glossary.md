@@ -94,11 +94,11 @@
 
 | Term | Definition |
 |------|-----------|
-| ESP32 | Microcontroller with Wi-Fi that reads the sensor and publishes measurements to the backend. |
+| ESP32 | Microcontroller with Wi-Fi that reads the sensor and publishes measurements to the broker; the measurement service stores them. |
 | PZEM-004T V3 | Electrical sensor module that measures voltage, current, active power, energy, frequency, and power factor. |
 | HLK-PM03 | AC/DC power supply module that powers the measuring device from mains voltage. |
 | UART | Serial protocol used between the sensor and the microcontroller. |
-| MQTT | Lightweight publish/subscribe protocol used to transport measurements from devices to the backend. |
+| MQTT | Lightweight publish/subscribe protocol used to transport measurements from devices to the measurement service. |
 | MQTT Broker | Intermediary that receives published messages and routes them to subscribers, decoupling devices from the services. Eclipse Mosquitto with `mosquitto-go-auth`, run by the `energy-monitor-infra` Docker stack (TLS on 8883 for devices, 1883 inside Docker only). It stores no users: it asks the device service to authenticate and authorise every client. |
 | Topic | Hierarchical channel name a device publishes to and a service subscribes to: `energy-monitor/devices/{deviceId}/telemetry`, `/status` and `/command`. |
 | API Key | Secret assigned to a device so it can authenticate to the MQTT broker. Not a user credential. Stored only as a SHA-256 hash; reissued from the web when the module moves to a new Wi-Fi network. |
@@ -111,10 +111,10 @@
 | Term | Definition |
 |------|-----------|
 | Microservice | Independently deployed service that owns one bounded context, with its own repository, lifecycle, and CI/CD. **In this project it does not imply a dedicated database** — see `Shared Database`. In production: `en-monitor-security-service`, `en-monitor-device-service`, `en-monitor-measurement-service`. |
-| Modular Monolith | One deployable application divided into modules with enforced boundaries. In this project: `energy-monitor-backend` (Spring Modulith), which still holds `home`, `alert`, `recommendation` and `notification`; their migration to microservices is in progress. |
-| Proxy package | A package left in `energy-monitor-backend` for a context that moved to a microservice (`security`, `device`, `measurement`). It keeps the `api` the other modules use and answers it by calling the service's internal API or by republishing its RabbitMQ events in memory. It has no domain and no tables. |
+| Modular Monolith | One deployable application divided into modules with enforced boundaries. In this project: `energy-monitor-backend` (Spring Modulith), which held every context at first and was retired on 28-Oct-2026 when its last modules became microservices. |
+| Proxy package | (Historical) A package left in `energy-monitor-backend` for a context that moved to a microservice. It kept the `api` the other modules used and answered it by calling the service's internal API. Gone since the monolith was retired. |
 | Bounded Context | Boundary within which a particular domain model has consistent meaning. `Security`, `Home Management`, `Devices`, `Monitoring and Measurements`, `Alerts`, `Recommendations`, and `Notification` are separate contexts. |
-| Shared Database | Current decision (`ADR-003`): every service and the backend connect to one MySQL 8.4 schema (`energy_monitor`), organized logically by domain. Each one owns its own tables and applies only its own Liquibase changesets; all of them share the `DATABASECHANGELOG` table (`ADR-009`). No foreign key crosses a service boundary. |
+| Shared Database | Current decision (`ADR-003`): every service connects to one MySQL 8.4 schema (`energy_monitor`), organized logically by domain. Each one owns its own tables and applies only its own Liquibase changesets; all of them share the `DATABASECHANGELOG` table (`ADR-009`). No foreign key crosses a service boundary. |
 | Distributed Monolith | Anti-pattern this project explicitly avoids: modules that share a database also reaching into each other's tables or entities instead of talking through contracts. |
 | Hexagonal Architecture | Architectural style, also called Ports and Adapters, where the domain is isolated from frameworks and all external interaction happens through explicit ports implemented by adapters. |
 | Port | Interface the application layer depends on. Inbound ports expose use cases; outbound ports declare capabilities the application needs from the outside. |
@@ -136,7 +136,7 @@
 | Singleton | Pattern used to expose system-wide default values from a single instance. |
 | Idempotence | Property of an operation to produce the same result if executed multiple times. Required for measurement ingestion, since MQTT may redeliver, and for every RabbitMQ consumer, since delivery is at least once. |
 | DTO | Data Transfer Object used at the web boundary. Domain models and persistence entities are never exposed directly. |
-| Spring Modulith | Library that enforces module boundaries at compile time and runtime, verifies allowed dependencies, and supports event publication within the modular monolith. Used in `energy-monitor-backend`, where `ModularityTests` checks the boundaries. |
+| Spring Modulith | Library that enforces module boundaries at compile time and runtime, verifies allowed dependencies, and supports event publication within the modular monolith. Used in the former `energy-monitor-backend`, where `ModularityTests` checked the boundaries. |
 
 ---
 

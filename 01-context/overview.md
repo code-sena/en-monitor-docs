@@ -39,21 +39,20 @@ The system exposes two clients over the same public API, served through the API 
 ## Bounded contexts and where they run
 
 The backend started as a **modular monolith** built with Spring Modulith, one module per bounded
-context. Since October 2026 three contexts run as their own **microservices** behind an **API
-gateway**; the other four still run in the modular monolith `energy-monitor-backend`, and
-migrating them to microservices is **in progress** (Miguel Ángel García Artunduaga). Every
-context keeps its own domain model and hexagonal architecture (ports & adapters) wherever it
-runs.
+context. Since 28-Oct-2026 every context runs as its own **microservice** behind an **API
+gateway**; the monolith `energy-monitor-backend` was retired (the migration of the last four
+contexts was carried out by Miguel Ángel García Artunduaga). Every context keeps its own domain
+model and hexagonal architecture (ports & adapters).
 
-| Context | Runs in | Responsibility | Key events published | Status (24-Oct-2026) |
+| Context | Runs in | Responsibility | Key events published | Status (28-Oct-2026) |
 |---------|---------|----------------|---------------------|---------------------|
 | **Security** | `en-monitor-security-service` (:8082) | Accounts, e-mail verification, login, Google sign-in, sessions (JWT + refresh), password recovery, RBAC, audit trail, support contacts | `account.registered`, `account.administered`, `account.deleted`, mail requests (RabbitMQ) | Microservice, in production |
 | **Devices** | `en-monitor-device-service` (:8084) | Device linking and credentials (API key), appliance catalogue, MQTT authentication and ACL, commands, connectivity tracking | `device.linked`, `device.unlinked`, `device.connectivity-lost`, `device.connectivity-restored` (RabbitMQ) | Microservice, in production |
 | **Monitoring and Measurements** | `en-monitor-measurement-service` (:8085) | Measurement ingestion (MQTT), consumption history, statistics, home consumption, consumption levels | `measurement.recorded` (RabbitMQ) | Microservice, in production |
-| **Home Management** | `energy-monitor-backend` (:8083), module `home` | Homes, membership, home-scoped roles, consumption thresholds | `home.deleted` (RabbitMQ), `HomeOwnershipTransferred` (in memory) | In the monolith; migration in progress |
-| **Alerts** | `energy-monitor-backend`, module `alert` | Threshold, limit and connectivity alerts | `AlertRaised` (in memory) | In the monolith; migration in progress |
-| **Recommendations** | `energy-monitor-backend`, module `recommendation` | Consumption-based suggestions | `RecommendationCreated` (in memory) | In the monolith; migration in progress |
-| **Notification** | `energy-monitor-backend`, module `notification` | E-mail, Web Push (VAPID), mobile push (Expo) and in-app administrator notices; delivery log | — | In the monolith; migration in progress |
+| **Home Management** | `en-monitor-home-service` (:8086) | Homes, membership, home-scoped roles, consumption thresholds, ownership transfer | `home.created`, `home.member-joined`, `home.member-left`, `home.member-removed`, `home.thresholds-updated`, `home.ownership-transferred`, `home.deleted` (RabbitMQ) | Microservice, in production |
+| **Alerts** | `en-monitor-alert-service` (:8088) | Threshold, unusual-consumption, limit, connectivity and linked-device alerts | `alert.raised` (RabbitMQ) | Microservice, in production |
+| **Recommendations** | `en-monitor-recommendation-service` (:8089) | Consumption-based suggestions (five rules, hourly) | `recommendation.created` (RabbitMQ) | Microservice, in production |
+| **Notification** | `en-monitor-notification-service` (:8087) | E-mail, Web Push (VAPID), mobile push (Expo), in-app inbox and administrator notices; delivery log | — (it only consumes) | Microservice, in production |
 
 All client requests enter through `en-monitor-api-gateway` (:8080). Details:
 `05-architecture/overview.md`.
@@ -67,7 +66,7 @@ All client requests enter through `en-monitor-api-gateway` (:8080). Details:
 | Web frontend | React 19 + Vite 8 | The component-based model fits a dashboard with charts and reusable views; the ecosystem also provides mature support for internationalization and data visualization |
 | Android mobile application | Expo 57 / React Native (Android only) | Shares language, component model, and mental model with the web client, so the team maintains one set of skills instead of two; produces a native Android application. iOS is not targeted and is not planned |
 | API gateway | Spring Cloud Gateway Server Web MVC (Spring Boot 4.0.8, Spring Cloud 2025.1.3) | Same Java/Spring stack as the services (`ADR-004`) |
-| Backend services | Java 21 + Spring Boot 4.1.1; Spring Modulith in `energy-monitor-backend` | Spring Security and the OAuth2 resource server cover the identity requirements; Spring Modulith enforces the module boundaries inside the monolith; the ecosystem supports hexagonal architecture |
+| Backend services | Java 21 + Spring Boot 4.1.1 (seven services) | Spring Security and the OAuth2 resource server cover the identity requirements; the ecosystem supports hexagonal architecture. Spring Modulith was used while the backend was a monolith (retired 28-Oct-2026) |
 | Service-to-service events | RabbitMQ 4.1, transactional outbox per service | A change and its message commit together; at-least-once delivery with dead-letter queues (`ADR-008`) |
 | Database | MySQL 8.4, one shared schema; Liquibase per service | The relational model fits the domain; one shared instance keeps operational complexity low, with each service owning its tables (`ADR-003`, `ADR-009`) |
 | Infrastructure | Docker, Docker Compose (local, development and production modes); Nginx + Certbot on an Ubuntu VPS | Reproducible environments for local development and production (`05-architecture/deployment.md`) |
@@ -79,11 +78,13 @@ All client requests enter through `en-monitor-api-gateway` (:8080). Details:
 - **Current version:** Not versioned with release tags; production runs the `main` branch of each
   repository (`09-microservices/service-catalog.md` lists the commit of each one).
 - **Implemented bounded contexts:** all seven.
-- **Architecture:** API gateway + three microservices (Security, Devices, Monitoring and
-  Measurements) + the `energy-monitor-backend` modular monolith (Home Management, Alerts,
-  Recommendations, Notification).
-- **Next milestone:** migration of the four contexts still in the monolith to microservices, in
-  progress by Miguel Ángel García Artunduaga. Project delivery: 28-Oct-2026.
+- **Architecture:** API gateway + seven microservices (Security, Devices, Monitoring and
+  Measurements, Home Management, Notification, Alerts, Recommendations). The
+  `energy-monitor-backend` modular monolith was retired on 28-Oct-2026.
+- **Known limitations:** the thresholds of the unusual-consumption alert are constants in the code
+  (DT-27); the news shown in the web are generated from the git history and their titles are in
+  English (DT-26); the mobile app does not have the administration screens of the web.
+- **Project delivery:** 28-Oct-2026.
 
 ## Project contacts
 
