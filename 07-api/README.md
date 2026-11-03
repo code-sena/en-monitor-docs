@@ -13,7 +13,7 @@ can work in parallel (frontend, backend, other services) with an agreed contract
 
 ---
 
-## EnergyMonitor API surface (24-Oct-2026)
+## EnergyMonitor API surface (28-Oct-2026)
 
 ### Public API — route ownership
 
@@ -26,7 +26,10 @@ migration to microservices did **not** change any public path.
 | `/api/v1/auth/**`, `/api/v1/admin/users/**`, `/api/v1/admin/roles/**`, `/api/v1/support/**` | `en-monitor-security-service` :8082 |
 | `/api/v1/homes/{homeId}/devices/**`, `/api/v1/appliance-types/**` | `en-monitor-device-service` :8084 |
 | `/api/v1/measurements/**`, `/api/v1/consumption-levels/**`, `/api/v1/homes/{homeId}/consumption/**` | `en-monitor-measurement-service` :8085 |
-| any other `/api/v1/**` (homes, members, thresholds, alerts, recommendations, notifications, administrator notices) | `energy-monitor-backend` :8083 |
+| the rest of `/api/v1/homes/**`, `/api/v1/home-types/**` | `en-monitor-home-service` :8086 |
+| `/api/v1/notifications/**`, `/api/v1/admin/notifications/**` | `en-monitor-notification-service` :8087 |
+| `/api/v1/alerts/**` | `en-monitor-alert-service` :8088 |
+| `/api/v1/recommendations/**` | `en-monitor-recommendation-service` :8089 |
 | `/internal/**` | never forwarded |
 
 - **Authentication:** access token RS256 (15 min), rotating refresh token; the mobile app sends
@@ -37,10 +40,12 @@ migration to microservices did **not** change any public path.
   itself answers 401, 404, 429, 503 and 504 (`contracts/openapi/api-gateway.yaml`).
 - **Contracts:** each service publishes its own OpenAPI with springdoc (Swagger UI at
   `/swagger-ui.html` on its port in development mode). In this folder,
-  `contracts/openapi/api-gateway.yaml` describes the gateway, and `security-service.yaml`,
+  `contracts/openapi/api-gateway.yaml` describes the gateway; `security-service.yaml`,
   `device-service.yaml` and `measurement-service.yaml` are generated from each service's springdoc
-  output. The modules still in `energy-monitor-backend` get their contracts when they are
-  extracted. The early `auth-service.yaml` draft is archived in `99-archive/deprecated/`.
+  output; `home-service.yaml`, `notification-service.yaml`, `alert-service.yaml` and
+  `recommendation-service.yaml` were written from the controllers and DTOs of each service on
+  28-Oct-2026 and should be regenerated from springdoc the next time an endpoint changes. The
+  early `auth-service.yaml` draft is archived in `99-archive/deprecated/`.
 
 ### Internal API (`/internal/**`)
 
@@ -52,17 +57,18 @@ and the gateway never forwards it.
 
 | Caller → callee | Endpoint | Purpose |
 |---|---|---|
-| backend → security | `GET /internal/users/{id}/permissions` | Permission codes of a user (cached 30 s) |
-| backend → security | `POST /internal/users/profiles` `{userIds}` (≤ 500) | Names and e-mails (cached 60 s) |
-| backend → security | `GET /internal/administrators` | Administrator ids (cached 30 s) |
-| security → backend | `GET /internal/accounts/{id}/deletion-check` | 204 may delete; 409 `{message}` refused |
-| backend → device, measurement → device | `GET /internal/devices/{id}` | A device and its `homeId` (cached 30 s; stale copy up to 1 h) |
-| backend → device, measurement → device | `GET /internal/homes/{homeId}/devices` | Devices of a home |
-| device → backend, measurement → backend | `GET /internal/homes/{homeId}/access?userId=` | Member / owner of the home? (never cached) |
-| measurement → backend | `GET /internal/homes/{homeId}/thresholds` | Daily and monthly limits (404 = none) |
-| backend → measurement | `GET /internal/consumption-levels` | Level catalogue (cached 10 min) |
-| backend → measurement | `GET /internal/measurements/hourly-energy?deviceId=&from=&to=` | Energy per device and UTC hour (limit alerts, recommendations) |
-| backend → measurement | `GET /internal/measurements/reporting-devices?since=` | Devices with a reading since then |
+| notification → security | `GET /internal/users/{id}/permissions` | Permission codes of a user (cached 30 s) |
+| home, notification → security | `POST /internal/users/profiles` `{userIds}` (≤ 500) | Names, e-mails and photos (cached 60 s) |
+| notification → security | `GET /internal/administrators` | Administrator ids (cached 30 s) |
+| security → home | `GET /internal/accounts/{id}/deletion-check` | 204 may delete; 409 `{message}` refused |
+| measurement, alert, recommendation, notification → device | `GET /internal/devices/{id}` | A device and its `homeId` (cached 30 s; stale copy up to 1 h) |
+| measurement, alert, recommendation, notification → device | `GET /internal/homes/{homeId}/devices` | Devices of a home |
+| device, measurement, alert, recommendation → home | `GET /internal/homes/{homeId}/access?userId=` | Member / owner of the home? (never cached) |
+| measurement, alert, recommendation → home | `GET /internal/homes/{homeId}/thresholds` | Daily and monthly limits (404 = none) |
+| notification → home | `GET /internal/homes/{homeId}` | Name and members of a home |
+| alert, recommendation → measurement | `GET /internal/consumption-levels` | Level catalogue (cached 10 min) |
+| alert, recommendation → measurement | `GET /internal/measurements/hourly-energy?deviceId=&from=&to=` | Energy per device and UTC hour (limit alerts, unusual consumption, recommendations) |
+| alert, recommendation → measurement | `GET /internal/measurements/reporting-devices?since=` | Devices with a reading since then |
 | Mosquitto → device | `POST /internal/mqtt/auth/user`, `POST /internal/mqtt/auth/acl` | Authenticate / authorise an MQTT client (only the allowed networks) |
 
 ---
