@@ -1,0 +1,576 @@
+openapi: 3.1.0
+info:
+  title: Energy Monitor Home API
+  description: 'Homes, members, roles, favourites, consumption thresholds, ownership transfer and the home type catalogue. The bearer token is issued by the security service.
+
+
+    Written from the controllers and DTOs of the service at commit `6a4e396` (branch `main`, 28-Oct-2026); the code is the source of truth, so regenerate or review this file when an endpoint changes. The other contracts of this folder were generated from the springdoc output (`/v3/api-docs`).
+
+
+    Clients call these paths through `en-monitor-api-gateway`, which validates the access token first; the service validates it again. Error bodies carry the failure text in `message` or `error` (the home service and the gateway use the full `{timestamp, status, error, message, path}` shape; the alert, recommendation and notification services answer with a small `{error}` body in some cases).
+
+
+    Internal endpoints (`/internal/**`) are not part of this contract: they are only reachable inside the Docker network with `X-Internal-Token` (see `07-api/README.md`).'
+  version: v1
+servers:
+- url: https://energy-monitor.tech
+  description: Production, through the API gateway
+- url: http://localhost:8080
+  description: Development, through the API gateway
+- url: http://localhost:8086
+  description: Development mode, the service directly
+security:
+- bearerAuth: []
+paths:
+  /api/v1/homes:
+    get:
+      tags:
+      - Home
+      operationId: listHomes
+      summary: Homes of the caller, with role and favourite flag
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HomeMembershipResponse'
+    post:
+      tags:
+      - Home
+      operationId: createHome
+      summary: Creates a home; the caller becomes its OWNER and gets the access code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateHomeRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeResponse'
+        '400':
+          description: Invalid body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/homes/join:
+    post:
+      tags:
+      - Home
+      operationId: joinHome
+      summary: Joins a home with its 8-character access code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinHomeRequest'
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserHomeResponse'
+        '404':
+          description: No home has that access code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: Already a member
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/homes/{homeId}/members:
+    get:
+      tags:
+      - Home
+      operationId: listMembers
+      summary: Members of a home with names, roles and photos (any member)
+      parameters:
+      - name: homeId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UserHomeResponse'
+        '404':
+          description: Not a member of the home
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/homes/{homeId}/favorite:
+    put:
+      tags:
+      - Home
+      operationId: toggleFavorite
+      summary: Marks or unmarks the home as favourite for the caller
+      parameters:
+      - name: homeId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserHomeResponse'
+        '404':
+          description: Not a member of the home
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/homes/{homeId}/members/me:
+    delete:
+      tags:
+      - Home
+      operationId: leaveHome
+      summary: The caller leaves the home (the last owner cannot)
+      parameters:
+      - name: homeId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: No content
+        '404':
+          description: Not a member of the home
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: The caller is the last owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/homes/{homeId}/members/{userId}:
+    delete:
+      tags:
+      - Home
+      operationId: removeUser
+      summary: Removes a member (OWNER only)
+      parameters:
+      - name: homeId
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: userId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: No content
+        '403':
+          description: The caller is not the owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Home or member not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/homes/{homeId}/owner:
+    put:
+      tags:
+      - Home
+      operationId: transferOwnership
+      summary: Transfers ownership to another member; the roles are swapped atomically (OWNER only)
+      parameters:
+      - name: homeId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferHomeOwnershipRequest'
+      responses:
+        '204':
+          description: No content
+        '403':
+          description: The caller is not the owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Home or new owner not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: The new owner is not a member or is the caller
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/homes/{homeId}:
+    delete:
+      tags:
+      - Home
+      operationId: deleteHome
+      summary: Soft-deletes the home and announces home.deleted (OWNER only)
+      parameters:
+      - name: homeId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: No content
+        '403':
+          description: The caller is a MEMBER
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '404':
+          description: Not a member of the home
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/homes/{homeId}/thresholds:
+    get:
+      tags:
+      - Home
+      operationId: getThresholds
+      summary: Reads the thresholds of the home
+      parameters:
+      - name: homeId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeThresholdsResponse'
+        '404':
+          description: Not a member of the home
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+    put:
+      tags:
+      - Home
+      operationId: updateThresholds
+      summary: Sets the daily or monthly limit (OWNER only)
+      parameters:
+      - name: homeId
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateHomeThresholdsRequest'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeThresholdsResponse'
+        '400':
+          description: Invalid body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '403':
+          description: The caller is not the owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/homes/{homeId}/thresholds/defaults:
+    post:
+      tags:
+      - Home
+      operationId: resetToDefaults
+      summary: Resets the thresholds to the system values (OWNER only)
+      parameters:
+      - name: homeId
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeThresholdsResponse'
+        '403':
+          description: The caller is not the owner
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/home-types:
+    get:
+      tags:
+      - HomeType
+      operationId: listHomeTypes
+      summary: Home type catalogue
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HomeTypeResponse'
+  /api/v1/home-types/{idHomeType}:
+    get:
+      tags:
+      - HomeType
+      operationId: getHomeType
+      summary: One home type
+      parameters:
+      - name: idHomeType
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HomeTypeResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+components:
+  schemas:
+    ApiError:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        path:
+          type: string
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string
+    CreateHomeRequest:
+      type: object
+      required:
+      - name
+      - homeTypeId
+      - address
+      properties:
+        name:
+          type: string
+          maxLength: 50
+        homeTypeId:
+          type: string
+          maxLength: 10
+        address:
+          type: string
+          maxLength: 200
+        description:
+          type: string
+          maxLength: 200
+    JoinHomeRequest:
+      type: object
+      required:
+      - accessCode
+      properties:
+        accessCode:
+          type: string
+          maxLength: 8
+    TransferHomeOwnershipRequest:
+      type: object
+      required:
+      - newOwnerId
+      properties:
+        newOwnerId:
+          type: string
+          maxLength: 10
+    UpdateHomeThresholdsRequest:
+      type: object
+      required:
+      - limitPeriod
+      - limit
+      properties:
+        limitPeriod:
+          type: string
+          enum:
+          - DAILY
+          - MONTHLY
+        limit:
+          type: number
+          format: double
+          exclusiveMinimum: 0
+    HomeResponse:
+      type: object
+      properties:
+        idHome:
+          type: string
+        name:
+          type: string
+        homeTypeId:
+          type: string
+        address:
+          type: string
+        accessCode:
+          type: string
+        description:
+          type: string
+        creationDate:
+          type: string
+          format: date-time
+    HomeMembershipResponse:
+      type: object
+      properties:
+        idHome:
+          type: string
+        name:
+          type: string
+        homeTypeId:
+          type: string
+        address:
+          type: string
+        accessCode:
+          type: string
+        description:
+          type: string
+        creationDate:
+          type: string
+          format: date-time
+        role:
+          type: string
+          enum:
+          - OWNER
+          - MEMBER
+        favorite:
+          type: boolean
+        userResponsible:
+          type: string
+        userResponsibleLastName:
+          type: string
+        userResponsibleEmail:
+          type: string
+    UserHomeResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+        homeId:
+          type: string
+        role:
+          type: string
+          enum:
+          - OWNER
+          - MEMBER
+        favorite:
+          type: boolean
+        name:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        profileImage:
+          type: string
+    HomeThresholdsResponse:
+      type: object
+      properties:
+        idThreshold:
+          type: string
+        homeId:
+          type: string
+        dailyLimit:
+          type: number
+          format: double
+        monthlyLimit:
+          type: number
+          format: double
+        useSystemDefault:
+          type: boolean
+        limitPeriod:
+          type: string
+          enum:
+          - DAILY
+          - MONTHLY
+        defaultDailyLimit:
+          type: number
+          format: double
+        defaultMonthlyLimit:
+          type: number
+          format: double
+    HomeTypeResponse:
+      type: object
+      properties:
+        idHomeType:
+          type: string
+        name:
+          type: string
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

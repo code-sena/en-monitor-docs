@@ -1,0 +1,185 @@
+openapi: 3.1.0
+info:
+  title: Energy Monitor Recommendation API
+  description: 'Saving recommendations of a home. The service evaluates five rules every hour (peak hours, standby, week-over-week rise, limit projection, device increase) and keeps the inbox. The bearer token is issued by the security service.
+
+
+    Written from the controllers and DTOs of the service at commit `aeeeec5` (branch `main`, 28-Oct-2026); the code is the source of truth, so regenerate or review this file when an endpoint changes. The other contracts of this folder were generated from the springdoc output (`/v3/api-docs`).
+
+
+    Clients call these paths through `en-monitor-api-gateway`, which validates the access token first; the service validates it again. Error bodies carry the failure text in `message` or `error` (the home service and the gateway use the full `{timestamp, status, error, message, path}` shape; the alert, recommendation and notification services answer with a small `{error}` body in some cases).
+
+
+    Internal endpoints (`/internal/**`) are not part of this contract: they are only reachable inside the Docker network with `X-Internal-Token` (see `07-api/README.md`).'
+  version: v1
+servers:
+- url: https://energy-monitor.tech
+  description: Production, through the API gateway
+- url: http://localhost:8080
+  description: Development, through the API gateway
+- url: http://localhost:8089
+  description: Development mode, the service directly
+security:
+- bearerAuth: []
+paths:
+  /api/v1/recommendations:
+    get:
+      tags:
+      - recommendation-controller
+      operationId: list
+      summary: Recommendations of a home (members only)
+      parameters:
+      - name: homeId
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecommendationResponse'
+        '404':
+          description: Not a member of the home
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+    delete:
+      tags:
+      - recommendation-controller
+      operationId: deleteRead
+      summary: Deletes every READ recommendation of a home
+      parameters:
+      - name: homeId
+        in: query
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted:
+                    type: integer
+        '404':
+          description: Not a member of the home
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/recommendations/{idRecommendation}/read:
+    put:
+      tags:
+      - recommendation-controller
+      operationId: markRead
+      summary: Marks a recommendation as read
+      parameters:
+      - name: idRecommendation
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RecommendationResponse'
+        '404':
+          description: Not found or not a member of its home
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+  /api/v1/recommendations/{idRecommendation}:
+    delete:
+      tags:
+      - recommendation-controller
+      operationId: delete
+      summary: Deletes a READ recommendation
+      parameters:
+      - name: idRecommendation
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '204':
+          description: No content
+        '404':
+          description: Not found or not a member of its home
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+        '409':
+          description: The recommendation is still UNREAD
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiError'
+components:
+  schemas:
+    ApiError:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        status:
+          type: integer
+        error:
+          type: string
+        message:
+          type: string
+        path:
+          type: string
+        fieldErrors:
+          type: object
+          additionalProperties:
+            type: string
+    RecommendationResponse:
+      type: object
+      properties:
+        idRecommendation:
+          type: string
+        homeId:
+          type: string
+        deviceId:
+          type: string
+        deviceName:
+          type: string
+        type:
+          type: string
+          enum:
+          - SAVING
+          - PEAK_HOURS
+          - HIGH_CONSUMPTION
+          - HISTORICAL_COMPARISON
+          - THRESHOLD
+        messageKey:
+          type: string
+          description: recommendation.peakHours, recommendation.standby, recommendation.aboveAverage, recommendation.limitProjection or recommendation.deviceIncrease
+        dateTime:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+          - READ
+          - UNREAD
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
