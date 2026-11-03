@@ -28,7 +28,7 @@
 
 ---
 
-## Tools available in EnergyMonitor (24-Oct-2026)
+## Tools available in EnergyMonitor (28-Oct-2026)
 
 The playbook below is the target process. With the tooling actually in place there is no
 Prometheus, PagerDuty, Grafana or Kibana: detection is a user report, a red deploy job or
@@ -42,7 +42,10 @@ are:
 | `en-monitor-security-service` | `09-microservices/services/02-security-service/runbook.md` |
 | `en-monitor-device-service` | `09-microservices/services/03-device-service/runbook.md` |
 | `en-monitor-measurement-service` | `09-microservices/services/04-measurement-service/runbook.md` |
-| `energy-monitor-backend` | No runbook in this repository yet; its README and `docs/Architecture.md` describe its dependencies |
+| `en-monitor-home-service` | `09-microservices/services/05-home-service/runbook.md` |
+| `en-monitor-notification-service` | `09-microservices/services/06-notification-service/runbook.md` |
+| `en-monitor-alert-service` | `09-microservices/services/07-alert-service/runbook.md` |
+| `en-monitor-recommendation-service` | `09-microservices/services/08-recommendation-service/runbook.md` |
 
 ---
 

@@ -75,7 +75,7 @@ Data backup and recovery strategy.
 
 ---
 
-## EnergyMonitor operations at a glance (24-Oct-2026)
+## EnergyMonitor operations at a glance (28-Oct-2026)
 
 - Production: `https://energy-monitor.tech`, one Ubuntu VPS, Docker Compose project
   `energy-monitor-prod` (`05-architecture/deployment.md`).
@@ -83,7 +83,7 @@ Data backup and recovery strategy.
   reverted by `infra/deploy/deploy.sh`; daily MySQL backup (`deploy/backup-mysql.sh`).
 - No metrics, tracing or automated alerting stack yet (`observability.md`, "Current state").
 - Runbooks: `09-microservices/services/01-api-gateway/`, `02-security-service/`,
-  `03-device-service/`, `04-measurement-service/`.
+  `03-device-service/`, `04-measurement-service/`, `05-home-service/`, `06-notification-service/`, `07-alert-service/`, `08-recommendation-service/`.
 
 ---
 
