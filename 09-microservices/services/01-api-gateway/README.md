@@ -22,7 +22,7 @@ token and rate-limiting the public account endpoints. It owns no business data.
 | Repository | https://github.com/Juan-Cortes2045/en-monitor-api-gateway |
 | Technology | Java 21, Spring Boot 4.0.8, Spring Cloud Gateway Server Web MVC 5.0 (Spring Cloud 2025.1.3), Spring Security OAuth2 resource server, Apache HttpClient 5, Caffeine |
 | DB engine | — (none) |
-| Communicates with | `en-monitor-security-service` :8082, `en-monitor-device-service` :8084, `en-monitor-measurement-service` :8085, `energy-monitor-backend` :8083 |
+| Communicates with | `en-monitor-security-service` :8082, `en-monitor-device-service` :8084, `en-monitor-measurement-service` :8085, `en-monitor-home-service` :8086, `en-monitor-notification-service` :8087, `en-monitor-alert-service` :8088, `en-monitor-recommendation-service` :8089 |
 | Consumed by | Web app (through its nginx, same origin), Android app |
 | Status | 🟢 In production |
 
@@ -40,7 +40,10 @@ train that supports it.
   | `/api/v1/auth/**`, `/api/v1/admin/users/**`, `/api/v1/admin/roles/**`, `/api/v1/support/**` | security :8082 |
   | `/api/v1/homes/{homeId}/devices/**`, `/api/v1/appliance-types/**` | device :8084 |
   | `/api/v1/measurements/**`, `/api/v1/consumption-levels/**`, `/api/v1/homes/{homeId}/consumption/**` | measurement :8085 |
-  | any other `/api/v1/**` | backend :8083 |
+  | the rest of `/api/v1/homes/**`, `/api/v1/home-types/**` | home :8086 |
+  | `/api/v1/notifications/**`, `/api/v1/admin/notifications/**` | notification :8087 |
+  | `/api/v1/alerts/**` | alert :8088 |
+  | `/api/v1/recommendations/**` | recommendation :8089 |
   | `/internal/**` | never forwarded (401 without a token, 403 with one) |
   | anything else | 404 |
 
@@ -106,7 +109,10 @@ pair generated for the run).
 | `SECURITY_SERVICE_URL` | `http://localhost:8082` | Security service |
 | `DEVICE_SERVICE_URL` | `http://localhost:8084` | Device service |
 | `MEASUREMENT_SERVICE_URL` | `http://localhost:8085` | Measurement service |
-| `BACKEND_URL` | `http://localhost:8083` | Backend |
+| `HOME_SERVICE_URL` | `http://localhost:8086` | Home service |
+| `NOTIFICATION_SERVICE_URL` | `http://localhost:8087` | Notification service |
+| `ALERT_SERVICE_URL` | `http://localhost:8088` | Alert service |
+| `RECOMMENDATION_SERVICE_URL` | `http://localhost:8089` | Recommendation service |
 | `GATEWAY_CONNECT_TIMEOUT` | `2s` | Connection to a service |
 | `GATEWAY_READ_TIMEOUT` | `30s` | Answer of a service |
 | `GATEWAY_RATE_LIMIT_REQUESTS` | `20` | `POST`s per address and path in a window |

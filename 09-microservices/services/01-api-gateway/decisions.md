@@ -85,12 +85,13 @@ loopback or the Docker network, so a client cannot choose the address that is co
 **Date:** 2026-10-23
 **Status:** Active
 
-**Decision:** the device and measurement routes are matched before the backend's `/api/v1/**`
-catch-all, so moving a module out of the backend only adds a route here.
+**Decision:** the device and measurement routes are matched before the general home route, so
+moving a module out of the monolith only added a route here. The last extraction (28-Oct-2026)
+removed the monolith's catch-all: an unknown `/api/v1/**` path now answers 404.
 
 **Consequences:**
 - ✅ The paths the clients call never changed during the three extractions
-- ⚠️ `/api/v1/homes/{homeId}` and its members and thresholds stay in the backend, while
+- ⚠️ `/api/v1/homes/{homeId}` and its members and thresholds go to the home service, while
   `/api/v1/homes/{homeId}/devices/**` and `/consumption/**` go to other services
 
 ---

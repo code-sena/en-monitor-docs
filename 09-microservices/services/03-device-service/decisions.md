@@ -5,6 +5,12 @@
 > broker) are the ADRs in `05-architecture/decisions/records/`. The extraction ran from 22 to
 > 24 October 2026.
 
+> **Update (28-Oct-2026):** these decisions describe the extraction from the modular monolith as it
+> was done on 24-Oct-2026. The monolith's other modules have since become services of their own
+> (`05-home-service` … `08-recommendation-service`) and `energy-monitor-backend` was retired, so every
+> mention of "the backend" below means what the backend was at that time; its proxy packages no
+> longer exist.
+
 ---
 
 ## [DEC-001] Full migration, with a cached proxy left in the backend

@@ -9,15 +9,13 @@
 
 | Routing key | Payload | When it is emitted | Consumers |
 |---|---|---|---|
-| `device.linked` | `{deviceId, homeId, deviceName, linkedBy, linkedAt}` | A module is linked, the first time or again | Backend (device cache), measurement service (cache) |
-| `device.unlinked` | `{deviceId, homeId, unlinkedAt}` | A module is unlinked (also for every module of a deleted home) | Backend (cache), measurement service (cache) |
-| `device.connectivity-lost` | `{deviceId, homeId, occurredAt}` | An online device goes offline (status, last will or inactivity) | Backend: CONNECTIVITY alert |
-| `device.connectivity-restored` | `{deviceId, homeId, occurredAt}` | An offline device reports again | Backend: CONNECTIVITY alerts |
+| `device.linked` | `{deviceId, homeId, deviceName, linkedBy, linkedAt}` | A module is linked, the first time or again | Alert service (linked-device alert), measurement service (cache), notification service (activity) |
+| `device.unlinked` | `{deviceId, homeId, unlinkedAt}` | A module is unlinked (also for every module of a deleted home) | Measurement service (cache), notification service (activity) |
+| `device.connectivity-lost` | `{deviceId, homeId, occurredAt}` | An online device goes offline (status, last will or inactivity) | Alert service: CONNECTIVITY alert |
+| `device.connectivity-restored` | `{deviceId, homeId, occurredAt}` | An offline device reports again | Alert service: resolves the CONNECTIVITY alert |
 
-`homeId` is the home the device was linked to when the connectivity changed, or null. In the
-backend, the `device` proxy package republishes the connectivity events in memory as
-`DeviceConnectivityLost` / `DeviceConnectivityRestored` for the `alert` module (queue
-`energy-monitor-backend.device.events`).
+`homeId` is the home the device was linked to when the connectivity changed, or null. The alert
+service consumes them from the queue `alert-service.device.events`.
 
 ---
 
@@ -25,9 +23,9 @@ backend, the `device` proxy package republishes the connectivity events in memor
 
 | Event | Published by | Queue / exchange | What this service does |
 |---|---|---|---|
-| `home.deleted` (`{homeId, deletedBy, deletedAt}`) | `energy-monitor-backend` (`home_outbox`) | `device-service.device.home-deleted` on `energy-monitor.home` | Unlinks every module of the home, revokes their API keys, sends each the MQTT `unlink` command after commit and announces `device.unlinked` |
+| `home.deleted` (`{homeId, deletedBy, deletedAt}`) | Home service (`home_outbox`) | `device-service.device.home-deleted` on `energy-monitor.home` | Unlinks every module of the home, revokes their API keys, sends each the MQTT `unlink` command after commit and announces `device.unlinked` |
 
-Declaring this queue at startup is what lets the backend publish `home.deleted`: until it exists,
+Declaring this queue at startup is what lets the home service publish `home.deleted`: until it exists,
 the message waits in `home_outbox` (mandatory routing).
 
 ---

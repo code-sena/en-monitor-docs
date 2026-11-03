@@ -5,8 +5,8 @@
 
 **Service:** `en-monitor-api-gateway` (container `gateway`)
 **Repository:** https://github.com/Juan-Cortes2045/en-monitor-api-gateway
-**Version:** `main` @ `c070cec` (24-Oct-2026)
-**Last updated:** 2026-10-24
+**Version:** `main` @ `0b2c164` (28-Oct-2026)
+**Last updated:** 2026-11-03
 
 ---
 
@@ -47,7 +47,7 @@ must answer 401 through the gateway).
 
 | Symptom | Cause | Action |
 |---|---|---|
-| The API answers **503** | The gateway cannot reach the service that owns the path | `emc ps` and `emc logs --tail 100 security device measurement backend`; restart or redeploy the failing service |
+| The API answers **503** | The gateway cannot reach the service that owns the path | `emc ps` and `emc logs --tail 100 security device measurement home notification alert recommendation`; restart or redeploy the failing service |
 | The API answers **504** | The service took longer than 30 s (`GATEWAY_READ_TIMEOUT`) | Look at that service's logs and at MySQL |
 | Every authenticated call answers **401** | The token cannot be validated: wrong or missing `public.pem`, or the key pair was regenerated for the security service only | Check that `JWT_KEYS_DIR` holds the `public.pem` matching the security service's `private.pem`; recreate the containers |
 | The web app gets **401** while the mobile app works | The `em_access` cookie is not turned into a bearer token: the request lacks `X-Requested-With: XMLHttpRequest`, or the cookie expired | Sign in again; check the web build |

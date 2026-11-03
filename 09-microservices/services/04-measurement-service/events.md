@@ -9,12 +9,12 @@
 
 | Routing key | Payload | When it is emitted | Consumer |
 |---|---|---|---|
-| `measurement.recorded` | `{idMeasurement, deviceId, dateTime, voltage, current, activePower, storedEnergy}` | A reading is stored | `energy-monitor-backend` (queue `energy-monitor-backend.measurement.recorded`): the `measurement` proxy republishes it in memory as `MeasurementRecorded`, and the `alert` module evaluates threshold, limit and "device linked" alerts |
+| `measurement.recorded` | `{idMeasurement, deviceId, dateTime, voltage, current, activePower, storedEnergy}` | A reading is stored | Alert service (queue `alert-service.measurement.recorded`): evaluates the threshold, limit, unusual-consumption and "device linked" rules |
 
 - The message is written in the transaction of the reading (`TransactionalRegisterMeasurement`):
   one never commits without the other.
 - A relay publishes up to 50 pending messages per run, every second, oldest first, with
-  correlated confirms and mandatory routing; until the backend declares its queue they stay
+  correlated confirms and mandatory routing; until the alert service declares its queue they stay
   pending.
 
 ---
@@ -40,7 +40,7 @@
 ## Error handling
 
 - **Dead Letter Queue:** `measurement-service.device.events.dlq` on `measurement-service.dlx`; the
-  backend's `energy-monitor-backend.measurement.recorded` queue has its own `.dlq`.
+  alert service's `alert-service.measurement.recorded` queue has its own `.dlq`.
 - **Retries:** three attempts, 1, 2 and 4 s apart, then the dead-letter queue. A message without a
   `deviceId`, or of another type, is dropped.
 - **Broker down:** readings keep being stored and their messages wait in the outbox; without the

@@ -1,7 +1,7 @@
 # Data Model — Security Service
 
 > `en-monitor-security-service` is the **authoritative owner** of the tables below. No other
-> service reads them directly: the backend asks for permissions, profiles and administrators
+> service reads them directly: the home and notification services ask for permissions, profiles and administrators
 > through the internal API, and hears account changes as events.
 
 ---
@@ -79,7 +79,7 @@ erDiagram
 **Tool:** Liquibase, applied by the service on startup (`ADR-009`).
 **Script location:** `src/main/resources/db/changelog/security/` (same relative path as in the
 monolith, so already-applied changesets are recognised).
-**Naming convention:** `security-NNN-description` (`security-001` … `security-027` on 24-Oct-2026).
+**Naming convention:** `security-NNN-description` (`security-001` … `security-030` on 28-Oct-2026).
 
 **Rollback policy:** every changeset has a `rollback` block; changes are forward-only in
 production (`06-data/migration-strategy.md`).

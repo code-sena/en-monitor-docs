@@ -4,6 +4,12 @@
 > `README.md` of `en-monitor-measurement-service` and `docs/Architecture.md` of
 > `energy-monitor-backend`). The service's first commits are from 24 October 2026.
 
+> **Update (28-Oct-2026):** these decisions describe the extraction from the modular monolith as it
+> was done on 24-Oct-2026. The monolith's other modules have since become services of their own
+> (`05-home-service` … `08-recommendation-service`) and `energy-monitor-backend` was retired, so every
+> mention of "the backend" below means what the backend was at that time; its proxy packages no
+> longer exist.
+
 ---
 
 ## [DEC-001] The only subscriber that stores telemetry
@@ -11,7 +17,7 @@
 **Status:** Active
 
 **Decision:** this service subscribes to the telemetry with a read-only MQTT user and stores every
-reading; `energy-monitor-backend` is no longer an MQTT client and hears readings as
+reading; the alert service hears readings as
 `measurement.recorded`.
 
 **Consequences:**
@@ -29,12 +35,12 @@ reading; `energy-monitor-backend` is no longer an MQTT client and hears readings
 delivered rows purged after 7 days.
 
 **Consequences:**
-- ✅ The backend's alerts see every stored reading, even after a broker outage
+- ✅ The alerts see every stored reading, even after a broker outage
 - ⚠️ The outbox is the highest-volume outbox of the system, hence the purge
 
 ---
 
-## [DEC-003] Home access and limits asked to the backend, devices to the device service
+## [DEC-003] Home access and limits asked to the home service, devices to the device service
 
 **Status:** Active
 

@@ -1,7 +1,7 @@
 # Security Service — `en-monitor-security-service`
 
 > **Identity authority** of EnergyMonitor: the Security bounded context, extracted from
-> `energy-monitor-backend` in October 2026 and in production since 24-Oct-2026. It is the
+> the former `energy-monitor-backend` in October 2026 and in production since 24-Oct-2026. It is the
 > authoritative owner of accounts (`Person`, `User`), sessions, global roles and the audit trail.
 
 ---
@@ -23,8 +23,8 @@ permissions; it owns every security table.
 | Technology | Java 21, Spring Boot 4.1.1, Spring Security (OAuth2 resource server, JWT RS256), Spring Data JPA, Liquibase, Spring AMQP, springdoc-openapi |
 | DB engine | MySQL 8.4 — shared schema `energy_monitor`, security tables only (`ADR-003`) |
 | Architecture | Hexagonal: `api`, `domain`, `application`, `adapter`, `infrastructure` (package `com.energymonitor.security`) |
-| Communicates with | `energy-monitor-backend` (`GET /internal/accounts/{id}/deletion-check`); RabbitMQ (publishes) |
-| Consumed by | Web and mobile apps (through the gateway); `energy-monitor-backend` (internal API, events) |
+| Communicates with | `en-monitor-home-service` (`GET /internal/accounts/{id}/deletion-check`); RabbitMQ (publishes) |
+| Consumed by | Web and mobile apps (through the gateway); home and notification services (internal API, events) |
 | Status | 🟢 In production |
 
 ---
@@ -43,21 +43,21 @@ permissions; it owns every security table.
   The mobile app gets the tokens in the body.
 - Password recovery with a six-digit code (stored as `HMAC-SHA256(code, pepper)`, valid 15
   minutes, ten redemption attempts per address per 15 minutes).
-- Profile and account deletion (soft delete, after asking the backend whether the account may go).
+- Profile and account deletion (soft delete, after asking the home service whether the account may go).
 - RBAC: global role `ADMIN` with `USER.READ`, `USER.MANAGE`, `ROLE.MANAGE`; user directory, status
   changes and role grants under `/api/v1/admin/users/**` and `/api/v1/admin/roles/**`. Permissions
   are read from the database on every request.
 - Support contacts: `GET /api/v1/support/contacts` (public) lists the active administrators.
 - Audit trail (`audit_log`) and failed-login trail (`login_error_log`).
 - Publishes account events and mail requests through its outbox (`events.md`).
-- Internal API for the backend: permissions, profiles, administrators.
+- Internal API for the home and notification services: permissions, profiles, administrators.
 
 ## Out of scope (what it does NOT do)
 
-- **Does not send e-mail** — it publishes `mail.*` requests; `energy-monitor-backend`
-  (`notification`) sends them.
-- **Does not know homes** — home roles (`OWNER`, `MEMBER`) belong to the backend's `home`
-  module; the global `ADMIN` role grants no access to any home.
+- **Does not send e-mail** — it publishes `mail.*` requests; the notification
+  service sends them.
+- **Does not know homes** — home roles (`OWNER`, `MEMBER`) belong to the home
+  service; the global `ADMIN` role grants no access to any home.
 - **Does not answer CORS** — the gateway does, and drops `Origin` before forwarding.
 
 ---
@@ -75,7 +75,7 @@ permissions; it owns every security table.
 | `GET /api/v1/admin/users`, `PUT /api/v1/admin/users/{idUser}/status`, `PUT`/`DELETE /api/v1/admin/users/{idUser}/roles/{roleName}`, `GET /api/v1/admin/roles` | User administration |
 | `GET /api/v1/support/contacts` | Public list of administrators to contact |
 
-### Internal API (for `energy-monitor-backend`)
+### Internal API (for the home and notification services)
 
 | Route | Answer |
 |---|---|
@@ -105,8 +105,8 @@ It does not start without the RSA key pair (`SECURITY_JWT_PRIVATE_KEY_PATH`,
 `SECURITY_JWT_PUBLIC_KEY_PATH`, absolute paths) or the pepper. Without RabbitMQ it starts, but
 its messages wait in the outbox and the health is DOWN.
 
-Tests: `SPRING_DATASOURCE_PASSWORD=... ./mvnw test` (against the MySQL of infra; 660 tests green
-on 22-Oct-2026).
+Tests: `SPRING_DATASOURCE_PASSWORD=... ./mvnw test` (against the MySQL of infra; 774 tests green
+on 28-Oct-2026).
 
 ---
 

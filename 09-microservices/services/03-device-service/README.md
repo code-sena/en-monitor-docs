@@ -1,6 +1,6 @@
 # Device Service — `en-monitor-device-service`
 
-> The Devices bounded context, extracted from the `device` module of `energy-monitor-backend` in
+> The Devices bounded context, extracted from the `device` module of the former `energy-monitor-backend` in
 > October 2026 and in production since 24-Oct-2026. It is the authoritative owner of devices,
 > their link to a home, their credentials and their connectivity history.
 
@@ -24,15 +24,15 @@ tracks their connectivity.
 | Technology | Java 21, Spring Boot 4.1.1, Spring Data JPA, Liquibase, Spring AMQP, Paho MQTT |
 | DB engine | MySQL 8.4 — shared schema `energy_monitor`, device tables only (`ADR-003`) |
 | Architecture | Hexagonal: `api`, `domain`, `application`, `adapter`, `infrastructure` (package `com.energymonitor.device`) |
-| Communicates with | `energy-monitor-backend` (`GET /internal/homes/{homeId}/access`); Mosquitto (MQTT client); RabbitMQ |
-| Consumed by | Web and mobile apps (through the gateway); Mosquitto go-auth; `energy-monitor-backend` and the measurement service (internal API, events) |
+| Communicates with | `en-monitor-home-service` (`GET /internal/homes/{homeId}/access`); Mosquitto (MQTT client); RabbitMQ |
+| Consumed by | Web and mobile apps (through the gateway); Mosquitto go-auth; the measurement, alert, recommendation and notification services (internal API, events) |
 | Status | 🟢 In production |
 
 ---
 
 ## Responsibilities (what this service DOES)
 
-- **Device management** (through the gateway; membership and ownership asked to the backend):
+- **Device management** (through the gateway; membership and ownership asked to the home service):
 
   | Path | What it does |
   |---|---|
@@ -62,7 +62,7 @@ tracks their connectivity.
   marks a device `OFFLINE` after 150 s without data (`DEVICE_OFFLINE_AFTER`).
 - **Events** through its outbox (`events.md`), and unlinking every module of a deleted home on
   `home.deleted`.
-- **Internal API** for the backend and the measurement service:
+- **Internal API** for the measurement, alert, recommendation and notification services:
 
   | Path | Answer |
   |---|---|
@@ -76,10 +76,10 @@ tracks their connectivity.
 
 - **Does not store readings** — the measurement service is the only subscriber that stores
   telemetry; this service only uses telemetry to track connectivity.
-- **Does not know home membership** — it asks `energy-monitor-backend`, which owns homes; without
+- **Does not know home membership** — it asks the home service, which owns homes; without
   an answer the request gets 503.
-- **Does not raise alerts** — it publishes `device.connectivity-lost/restored`; the backend's
-  `alert` module raises CONNECTIVITY alerts.
+- **Does not raise alerts** — it publishes `device.connectivity-lost/restored`; the alert
+  service raises CONNECTIVITY alerts.
 
 ---
 
@@ -101,8 +101,8 @@ curl http://localhost:8084/actuator/health
 In development mode Mosquitto reaches this service on the host (`host-gateway`); on Linux with
 `ufw`, allow the Docker networks to port 8084 once (see `10-devops/local-setup.md`).
 
-Tests: `SPRING_DATASOURCE_PASSWORD=... ./mvnw test` (against the MySQL of infra; 130 tests green
-on 24-Oct-2026). They never reach a running backend or broker.
+Tests: `SPRING_DATASOURCE_PASSWORD=... ./mvnw test` (against the MySQL of infra; 129 tests green
+on 28-Oct-2026). They never reach a running home service or broker.
 
 ---
 

@@ -29,7 +29,7 @@ shared store (see `decisions.md`).
 | What | Where |
 |---|---|
 | Which service owns each path | `routing` package (`GatewayRoutes`) of the repository |
-| Service addresses | `SECURITY_SERVICE_URL`, `DEVICE_SERVICE_URL`, `MEASUREMENT_SERVICE_URL`, `BACKEND_URL` |
+| Service addresses | `SECURITY_SERVICE_URL`, `DEVICE_SERVICE_URL`, `MEASUREMENT_SERVICE_URL`, `HOME_SERVICE_URL`, `NOTIFICATION_SERVICE_URL`, `ALERT_SERVICE_URL`, `RECOMMENDATION_SERVICE_URL` |
 | Public account endpoints (no token required) | `SecurityFilterChainConfiguration.PUBLIC_ENDPOINTS` |
 | CORS origins | `SECURITY_CORS_ALLOWED_ORIGINS`, `SECURITY_CORS_ALLOWED_ORIGIN_PATTERNS` |
 
