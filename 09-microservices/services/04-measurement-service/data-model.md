@@ -1,7 +1,7 @@
 # Data Model — Measurement Service
 
-> `en-monitor-measurement-service` is the **authoritative owner** of the tables below. The backend
-> reads levels and hourly energy through the internal API and hears every reading as
+> `en-monitor-measurement-service` is the **authoritative owner** of the tables below. The alert and recommendation
+> services read levels and hourly energy through the internal API and hears every reading as
 > `measurement.recorded`; no other service reads these tables.
 
 ---
@@ -78,7 +78,7 @@ erDiagram
 
 **Tool:** Liquibase, applied by the service on startup (`ADR-009`).
 **Script location:** `src/main/resources/db/changelog/measurement/` — `measurement-001` to
-`measurement-003` keep the path they had in `energy-monitor-backend` and were recognised as
+`measurement-003` keep the path they had in the retired monolith and were recognised as
 applied; `measurement-004` (`measurement_outbox`) is the new changeset.
 **Naming convention:** `measurement-NNN-description`.
 

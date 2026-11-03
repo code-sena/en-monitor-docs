@@ -6,8 +6,8 @@
 
 **Service:** `en-monitor-device-service` (container `device`)
 **Repository:** https://github.com/Juan-Cortes2045/en-monitor-device-service
-**Version:** `main` @ `f8b8526` (24-Oct-2026)
-**Last updated:** 2026-10-24
+**Version:** `main` @ `06c1bdc` (28-Oct-2026)
+**Last updated:** 2026-11-03
 
 ---
 
@@ -42,7 +42,7 @@ End-to-end check on the local stack: `infra/e2e/device-flow.sh` (21/21 on 24-Oct
 | Broker logs `context deadline exceeded` calling `device:8084` | This service is down (or, in development mode, not running on the host / missing `ufw` rule for 8084) | `emc ps device`, `emc logs device` |
 | An MQTT client is refused with `rc=5` (not authorised) | This service does not recognise its credentials | `MQTT_DEVICE_SERVICE_USER/PASS` and `MQTT_MEASUREMENT_SERVICE_USER/PASS` must be the same in the connecting container and in this service |
 | A module does not connect: `X509 - Certificate verification failed` | The broker certificate does not cover the address the module uses | Production: check the Let's Encrypt certificate of `mqtt.energy-monitor.tech` (`deploy/renew-mqtt-cert.sh`); local: `DEVICE_MQTT_PUBLIC_HOST` + `./prepare.sh` |
-| Device routes answer 503 | This service is down, or the backend did not answer the home access check | `emc ps device backend`; check `INTERNAL_API_TOKEN` is the same everywhere |
+| Device routes answer 503 | This service is down, or the home service did not answer the home access check | `emc ps device home`; check `INTERNAL_API_TOKEN` is the same everywhere |
 | Devices stay `OFFLINE` | No telemetry for 150 s, or this service is not subscribed | `emc logs device`; check the module's Wi-Fi |
 | A deleted home's modules are still linked | `home.deleted` waiting in `home_outbox` or in `device-service.device.home-deleted.dlq` | RabbitMQ console through an SSH tunnel (`ssh -L 15672:127.0.0.1:15672 <server>`) |
 

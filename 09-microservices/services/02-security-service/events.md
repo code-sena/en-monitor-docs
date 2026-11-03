@@ -2,20 +2,20 @@
 
 > Everything other services must hear from the security service goes to the RabbitMQ topic
 > exchange `energy-monitor.security`, with the message type as routing key, through the
-> transactional outbox `security_outbox` (`ADR-008`). The only consumer today is
-> `energy-monitor-backend`.
+> transactional outbox `security_outbox` (`ADR-008`). Its consumers are the
+> notification and home services.
 
 ---
 
 ## Events this service PUBLISHES
 
-| Routing key | Body (JSON) | Consumer in `energy-monitor-backend` |
+| Routing key | Body (JSON) | Consumer |
 |---|---|---|
-| `account.registered` | `userId`, `email`, `occurredAt` | `notification`: in-app notice to the administrators |
-| `account.administered` | `actorId`, `userId`, `action`, `detail`, `occurredAt` | `notification`: in-app notice to the other administrators |
-| `account.deleted` | `userId`, `deletedAt` | `home`: drops the memberships and the homes the account alone owned |
-| `mail.email-verification` | `userId`, `recipient`, `code`, `validUntil` | `notification`: mails the code |
-| `mail.password-reset` | `userId`, `recipient`, `idResetToken`, `code`, `validUntil` | `notification`: mails the code |
+| `account.registered` | `userId`, `email`, `occurredAt` | Notification service: in-app notice to the administrators |
+| `account.administered` | `actorId`, `userId`, `action`, `detail`, `occurredAt` | Notification service: in-app notice to the other administrators |
+| `account.deleted` | `userId`, `deletedAt` | Home service: drops the memberships and the homes the account alone owned; notification service: cleans up preferences and push devices |
+| `mail.email-verification` | `userId`, `recipient`, `code`, `validUntil` | Notification service: mails the code |
+| `mail.password-reset` | `userId`, `recipient`, `idResetToken`, `code`, `validUntil` | Notification service: mails the code |
 
 Every message carries its id (`id_message` of the outbox row) as the broker message id, so
 consumers drop duplicates.

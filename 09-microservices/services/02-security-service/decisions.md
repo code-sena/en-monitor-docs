@@ -4,6 +4,12 @@
 > in `05-architecture/decisions/records/` (sessions and tokens: `ADR-010`, which supersedes `ADR-005`). Source: `docs/Architecture.md`
 > and `README.md` of the repository. Dates are those of the commits that introduced each decision.
 
+> **Update (28-Oct-2026):** these decisions describe the extraction from the modular monolith as it
+> was done on 24-Oct-2026. The monolith's other modules have since become services of their own
+> (`05-home-service` … `08-recommendation-service`) and `energy-monitor-backend` was retired, so every
+> mention of "the backend" below means what the backend was at that time; its proxy packages no
+> longer exist.
+
 ---
 
 ## [DEC-001] Moved out of the monolith unchanged in structure

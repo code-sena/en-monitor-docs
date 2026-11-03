@@ -6,8 +6,8 @@
 
 **Service:** `en-monitor-security-service` (container `security`)
 **Repository:** https://github.com/Juan-Cortes2045/en-monitor-security-service
-**Version:** `main` @ `334691a` (24-Oct-2026)
-**Last updated:** 2026-10-24
+**Version:** `main` @ `de52c95` (28-Oct-2026)
+**Last updated:** 2026-11-03
 
 ---
 
@@ -40,8 +40,8 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type: application/j
 | `unhealthy` with RabbitMQ up | `RABBITMQ_USERNAME`/`RABBITMQ_PASSWORD` do not match the user RabbitMQ created when its volume was first started | Change the password inside RabbitMQ (`rabbitmqctl change_password`, see the infra README) or recreate the `rabbitmq-data` volume (pending messages are lost) |
 | Does not start, names a key path | `private.pem` / `public.pem` missing, unreadable or of the wrong kind | Check `JWT_KEYS_DIR`: `private.pem` readable by uid 10001, `public.pem` 644 |
 | Does not start, pepper missing | `SECURITY_RESET_PEPPER` empty | Set it in `.env.prod` (keep the same value as before, or issued codes stop working) |
-| Account deletion answers 503 | The backend did not answer the deletion check (or `INTERNAL_API_TOKEN` differs) | Check `emc ps backend` and that `INTERNAL_API_TOKEN` is the same in every service |
-| Verification / recovery e-mails do not arrive | RabbitMQ down (messages wait in `security_outbox`) or the backend's mail settings | `emc logs security backend`; the backend is the one that sends e-mail |
+| Account deletion answers 503 | The home service did not answer the deletion check (or `INTERNAL_API_TOKEN` differs) | Check `emc ps home` and that `INTERNAL_API_TOKEN` is the same in every service |
+| Verification / recovery e-mails do not arrive | RabbitMQ down (messages wait in `security_outbox`) or the notification service's mail settings | `emc logs security notification`; the notification service is the one that sends e-mail |
 | Google sign-in answers 503 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` empty | Fill them in `.env.prod` |
 | Google answers `origin_mismatch` | The production origin is not in the OAuth client's authorized JavaScript origins | Add it in Google Cloud Console |
 | Sign-in answers 403 "Verify your email address" | The account has not verified its e-mail | Expected; the web asks for a new code |

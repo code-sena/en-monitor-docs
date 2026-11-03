@@ -1,7 +1,7 @@
 # Measurement Service — `en-monitor-measurement-service`
 
 > The Monitoring and Measurements bounded context, extracted from the `measurement` module of
-> `energy-monitor-backend` and in production since 24-Oct-2026. It is the authoritative owner of
+> the former `energy-monitor-backend` and in production since 24-Oct-2026. It is the authoritative owner of
 > the readings and of the consumption level catalogue.
 
 ---
@@ -23,8 +23,8 @@ consumption history, statistics and levels of a device and of a home.
 | Technology | Java 21, Spring Boot 4.1.1, Spring Data JPA, Liquibase, Spring AMQP, MQTT client |
 | DB engine | MySQL 8.4 — shared schema `energy_monitor`, measurement tables only (`ADR-003`) |
 | Architecture | Hexagonal: `api`, `domain`, `application`, `adapter`, `infrastructure` (package `com.energymonitor.measurement`) |
-| Communicates with | `energy-monitor-backend` (home access, thresholds), `en-monitor-device-service` (devices), Mosquitto (MQTT client), RabbitMQ |
-| Consumed by | Web and mobile apps (through the gateway); `energy-monitor-backend` (internal API, `measurement.recorded`) |
+| Communicates with | `en-monitor-home-service` (home access, thresholds), `en-monitor-device-service` (devices), Mosquitto (MQTT client), RabbitMQ |
+| Consumed by | Web and mobile apps (through the gateway); alert, recommendation and notification services (internal API, `measurement.recorded`) |
 | Status | 🟢 In production |
 
 ---
@@ -50,7 +50,7 @@ consumption history, statistics and levels of a device and of a home.
   | `GET /api/v1/consumption-levels` | Consumption level catalogue |
 
 - **Publishes** every stored reading as `measurement.recorded` through its outbox (`events.md`).
-- **Internal API** for `energy-monitor-backend`:
+- **Internal API** for the alert and recommendation services:
 
   | Path | Answer |
   |---|---|
@@ -64,16 +64,16 @@ consumption history, statistics and levels of a device and of a home.
 
 | Service | Call | For |
 |---|---|---|
-| `energy-monitor-backend` | `GET /internal/homes/{homeId}/access?userId=` | Is the caller a member of the home? (never cached) |
-| `energy-monitor-backend` | `GET /internal/homes/{homeId}/thresholds` | Daily and monthly limits of the summary (404 = none) |
+| Home service | `GET /internal/homes/{homeId}/access?userId=` | Is the caller a member of the home? (never cached) |
+| Home service | `GET /internal/homes/{homeId}/thresholds` | Daily and monthly limits of the summary (404 = none) |
 | Device service | `GET /internal/devices/{deviceId}`, `GET /internal/homes/{homeId}/devices` | Home of a device, devices of a home (30 s cache; last answer served up to 1 h while the device service does not answer) |
 
 No answer and nothing kept: the request gets 503 (and an incoming reading is dropped).
 
 ## Out of scope (what it does NOT do)
 
-- **Does not raise alerts** — `energy-monitor-backend` hears `measurement.recorded` and its `alert`
-  module raises threshold, limit and "device linked" alerts.
+- **Does not raise alerts** — the alert service hears `measurement.recorded` and raises
+  threshold, limit, unusual-consumption and "device linked" alerts.
 - **Does not own homes, thresholds or devices** — it asks their owners.
 - **Does not publish to the devices** — only the device service sends commands.
 
@@ -97,10 +97,10 @@ curl http://localhost:8085/actuator/health
 The MQTT subscription is **off by default** (`MEASUREMENT_MQTT_ENABLED=false`), so a run from the
 IDE or the tests never takes the readings by surprise; the infra stack turns it on. Only one
 subscriber may store readings: two would store every reading twice in the shared table. The
-backend and the device service must be running for homes and devices.
+home and device services must be running for homes and devices.
 
 Tests: `SPRING_DATASOURCE_PASSWORD=... RABBITMQ_USERNAME=... RABBITMQ_PASSWORD=... ./mvnw test`
-(151 tests green on 24-Oct-2026).
+(151 tests green on 28-Oct-2026).
 
 ---
 

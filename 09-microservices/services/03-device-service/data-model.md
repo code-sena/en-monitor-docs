@@ -58,7 +58,7 @@ erDiagram
 
 ## Modeling decisions
 
-- **`home_id` without a foreign key:** homes belong to `energy-monitor-backend`; a device refers to
+- **`home_id` without a foreign key:** homes belong to the home service; a device refers to
   its home by identifier only.
 - **API key as a hash:** the key is shown once when the module is linked (or reissued) and only its
   SHA-256 hash is stored.
@@ -69,7 +69,7 @@ erDiagram
 
 **Tool:** Liquibase, applied by the service on startup (`ADR-009`).
 **Script location:** `src/main/resources/db/changelog/device/` — `device-001` to `device-008` keep
-the path they had in `energy-monitor-backend`, so they were recognised as applied; only
+the path they had in the retired monolith, so they were recognised as applied; only
 `device-009` (`device_outbox`) ran when the service was first deployed.
 **Naming convention:** `device-NNN-description`.
 

@@ -3,7 +3,7 @@
 > **What is this?** The individual documentation for each microservice in the system.
 > This is the most active section of the repository — it is updated with every significant change.
 
-## EnergyMonitor services (24-Oct-2026)
+## EnergyMonitor services (28-Oct-2026)
 
 | Folder | Service | Port | Repository | Status |
 |---|---|---|---|---|
@@ -11,11 +11,14 @@
 | [`services/02-security-service/`](./services/02-security-service/README.md) | `en-monitor-security-service` | 8082 | `Juan-Cortes2045/en-monitor-security-service` | 🟢 In production |
 | [`services/03-device-service/`](./services/03-device-service/README.md) | `en-monitor-device-service` | 8084 | `Juan-Cortes2045/en-monitor-device-service` | 🟢 In production |
 | [`services/04-measurement-service/`](./services/04-measurement-service/README.md) | `en-monitor-measurement-service` | 8085 | `Juan-Cortes2045/en-monitor-measurement-service` | 🟢 In production |
-| — | `energy-monitor-backend` (modular monolith: `home`, `alert`, `recommendation`, `notification`) | 8083 | `Juan-Cortes2045/energy-monitor-backend` | 🟢 In production; 🟡 migration of its four contexts to microservices in progress (teammate) |
+| [`services/05-home-service/`](./services/05-home-service/README.md) | `en-monitor-home-service` | 8086 | `angelgarcia0/en-monitor-home-service` | 🟢 In production |
+| [`services/06-notification-service/`](./services/06-notification-service/README.md) | `en-monitor-notification-service` | 8087 | `angelgarcia0/en-monitor-notification-service` | 🟢 In production |
+| [`services/07-alert-service/`](./services/07-alert-service/README.md) | `en-monitor-alert-service` | 8088 | `angelgarcia0/en-monitor-alert-service` | 🟢 In production |
+| [`services/08-recommendation-service/`](./services/08-recommendation-service/README.md) | `en-monitor-recommendation-service` | 8089 | `angelgarcia0/en-monitor-recommendation-service` | 🟢 In production |
 
-Home Management, Alerts, Recommendations and Notification have no folder here yet: they still run
-inside `energy-monitor-backend`, and their migration to microservices is in progress (Miguel
-Ángel García Artunduaga). Their folders will be added when their service names and ports exist.
+The migration finished on 28-Oct-2026: Home Management, Alerts, Recommendations and Notification
+left the modular monolith, which was retired (`energy-monitor-backend` now only keeps the ESP32
+firmware and its history).
 
 The dependency map between services is [`dependency-map.md`](./dependency-map.md). The other
 cross-cutting views this README describes below (communication patterns, event catalog, data

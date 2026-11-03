@@ -6,8 +6,8 @@
 
 **Service:** `en-monitor-measurement-service` (container `measurement`)
 **Repository:** https://github.com/Juan-Cortes2045/en-monitor-measurement-service
-**Version:** `main` @ `ee2cb81` (24-Oct-2026)
-**Last updated:** 2026-10-24
+**Version:** `main` @ `8a9b544` (28-Oct-2026)
+**Last updated:** 2026-11-03
 
 ---
 
@@ -33,7 +33,7 @@ emc logs mosquitto | grep "New client connected"   # em-measurement-service conn
 
 End-to-end check on the local stack: `infra/e2e/measurement-flow.sh` (25/25 on 24-Oct-2026). It
 checks each reading is stored once, announced as `measurement.recorded`, raises and resolves a
-`THRESHOLD` alert in the backend, and that `energy-monitor-backend.measurement.recorded` and its
+`THRESHOLD` alert in the alert service, and that `alert-service.measurement.recorded` and its
 `.dlq` end empty.
 
 ---
@@ -44,8 +44,8 @@ checks each reading is stored once, announced as `measurement.recorded`, raises 
 |---|---|---|
 | Readings stored twice | Two subscribers with `MEASUREMENT_MQTT_ENABLED=true` (for example a service on a PC pointed at the same broker) | Leave the subscription on in one instance only |
 | No new readings | Subscription off, MQTT user refused (`rc=5`: `MQTT_MEASUREMENT_SERVICE_USER/PASS` differ from the device service's copy), or the device service is down (unknown devices are dropped) | `emc logs measurement mosquitto device` |
-| Consumption screens answer 503 | The backend or the device service did not answer and nothing was cached | `emc ps backend device`; check `INTERNAL_API_TOKEN` |
-| Alerts no longer react to readings | `measurement.recorded` waiting in `measurement_outbox` (broker down) or in the backend's `.dlq` | RabbitMQ console through an SSH tunnel (`ssh -L 15672:127.0.0.1:15672 <server>`) |
+| Consumption screens answer 503 | The home or the device service did not answer and nothing was cached | `emc ps home device`; check `INTERNAL_API_TOKEN` |
+| Alerts no longer react to readings | `measurement.recorded` waiting in `measurement_outbox` (broker down) or in the alert service's `.dlq` | RabbitMQ console through an SSH tunnel (`ssh -L 15672:127.0.0.1:15672 <server>`) |
 
 ---
 

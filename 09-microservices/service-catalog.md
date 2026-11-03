@@ -1,7 +1,7 @@
 # Microservices Catalog
 
 > The complete inventory of EnergyMonitor's backend components, as they run in production at
-> `https://energy-monitor.tech` on 24-Oct-2026. For the detail of each service, go to
+> `https://energy-monitor.tech` since 28-Oct-2026. For the detail of each service, go to
 > `09-microservices/services/NN-service-name/`. This catalog is the executive view — one row per
 > component.
 
@@ -17,20 +17,18 @@
                        │ en-monitor-api-gateway│  CORS · token check · rate limit · routing
                        │        :8080          │  /internal/** refused
                        └──────────┬───────────┘
-        ┌───────────────┬─────────┴────────┬──────────────────────┐
-        ▼               ▼                  ▼                      ▼
- ┌─────────────┐ ┌─────────────┐ ┌──────────────────┐ ┌───────────────────────────┐
- │ security    │ │ device      │ │ measurement      │ │ energy-monitor-backend    │
- │ :8082       │ │ :8084       │ │ :8085            │ │ :8083 (Spring Modulith)   │
- │             │ │             │ │                  │ │ home · alert ·            │
- │             │ │             │ │                  │ │ recommendation ·          │
- │             │ │             │ │                  │ │ notification              │
- └──────┬──────┘ └──────┬──────┘ └────────┬─────────┘ └─────────────┬─────────────┘
-        │  /internal/** (X-Internal-Token) between them, inside Docker │
-        └───────────────┴──────┬───────────┴──────────────────────────┘
-                 ┌─────────────┴──────────────┬───────────────────────┐
-                 ▼                            ▼                       ▼
-          MySQL 8.4 (one schema)     RabbitMQ 4.1 (outbox)    Mosquitto (go-auth)
+   ┌──────────┬──────────┬────────┴─┬──────────┬──────────┬──────────┬──────────────┐
+   ▼          ▼          ▼          ▼          ▼          ▼          ▼              
+┌────────┐┌────────┐┌─────────┐┌────────┐┌────────────┐┌────────┐┌──────────────┐
+│security││ device ││measure- ││  home  ││notification││ alert  ││recommendation│
+│ :8082  ││ :8084  ││  ment   ││ :8086  ││   :8087    ││ :8088  ││    :8089     │
+│        ││        ││  :8085  ││        ││            ││        ││              │
+└───┬────┘└───┬────┘└────┬────┘└───┬────┘└─────┬──────┘└───┬────┘└──────┬───────┘
+    │ /internal/** (X-Internal-Token) between them, inside Docker       │
+    └─────────┴──────────┴─────────┼───────────┴───────────┴────────────┘
+                ┌───────────────────┴─────────┬───────────────────────┐
+                ▼                             ▼                       ▼
+         MySQL 8.4 (one schema)      RabbitMQ 4.1 (outbox)    Mosquitto (go-auth)
                                                               ◄── ESP32 modules, TLS 8883
 ```
 
@@ -41,41 +39,45 @@
 | # | Component | Main responsibility | Port | Repository | DB | Status |
 |---|---|---|---|---|---|---|
 | 01 | `en-monitor-api-gateway` | Single API entry point: CORS, token validation, rate limit, routing | 8080 | [en-monitor-api-gateway](https://github.com/Juan-Cortes2045/en-monitor-api-gateway) | None | 🟢 In production |
-| 02 | `en-monitor-security-service` | Security context: accounts, login, JWT, sessions, RBAC, audit | 8082 | [en-monitor-security-service](https://github.com/Juan-Cortes2045/en-monitor-security-service) | Shared MySQL 8.4 | 🟢 In production |
+| 02 | `en-monitor-security-service` | Security context: accounts, registration with e-mail verification, terms, login, Google, JWT, sessions, RBAC, audit | 8082 | [en-monitor-security-service](https://github.com/Juan-Cortes2045/en-monitor-security-service) | Shared MySQL 8.4 | 🟢 In production |
 | 03 | `en-monitor-device-service` | Devices context: linking, credentials, MQTT auth/ACL, commands, connectivity | 8084 | [en-monitor-device-service](https://github.com/Juan-Cortes2045/en-monitor-device-service) | Shared MySQL 8.4 | 🟢 In production |
 | 04 | `en-monitor-measurement-service` | Monitoring and Measurements context: readings, history, statistics, consumption | 8085 | [en-monitor-measurement-service](https://github.com/Juan-Cortes2045/en-monitor-measurement-service) | Shared MySQL 8.4 | 🟢 In production |
-| — | `energy-monitor-backend` | Modular monolith (Spring Modulith): Home Management, Alerts, Recommendations, Notification | 8083 | [energy-monitor-backend](https://github.com/Juan-Cortes2045/energy-monitor-backend) | Shared MySQL 8.4 | 🟢 In production — 🟡 its four contexts are being migrated to microservices |
+| 05 | `en-monitor-home-service` | Home Management context: homes, members, roles, favourites, thresholds, deletion, ownership transfer | 8086 | [en-monitor-home-service](https://github.com/angelgarcia0/en-monitor-home-service) | Shared MySQL 8.4 | 🟢 In production |
+| 06 | `en-monitor-notification-service` | Notification context: e-mail, Web Push, mobile push, preferences, in-app inbox, administrator notices | 8087 | [en-monitor-notification-service](https://github.com/angelgarcia0/en-monitor-notification-service) | Shared MySQL 8.4 | 🟢 In production |
+| 07 | `en-monitor-alert-service` | Alerts context: threshold, unusual-consumption, limit, connectivity and linked-device alerts | 8088 | [en-monitor-alert-service](https://github.com/angelgarcia0/en-monitor-alert-service) | Shared MySQL 8.4 | 🟢 In production |
+| 08 | `en-monitor-recommendation-service` | Recommendations context: five saving rules evaluated every hour, inbox | 8089 | [en-monitor-recommendation-service](https://github.com/angelgarcia0/en-monitor-recommendation-service) | Shared MySQL 8.4 | 🟢 In production |
 
 **Statuses:** 🟢 In production | 🟡 In progress | 🔴 Planned | ⏸ Deprecated
 
-### Contexts still in the monolith
+The migration from the modular monolith finished on 28-Oct-2026: every bounded context is now its
+own service. The repository `energy-monitor-backend` is **retired**; it only keeps the ESP32
+firmware (`firmware/`) and the history of the monolith. The port `:8083` no longer exists.
 
-| Bounded context | Module in `energy-monitor-backend` | Status |
-|---|---|---|
-| Home Management | `home` | 🟡 Migration to a microservice in progress (teammate: Miguel Ángel García Artunduaga) |
-| Alerts | `alert` | 🟡 Migration to a microservice in progress (teammate) |
-| Recommendations | `recommendation` | 🟡 Migration to a microservice in progress (teammate) |
-| Notification | `notification` | 🟡 Migration to a microservice in progress (teammate) |
-
-Service names, ports and repositories for these four are not defined yet; they will get a row in
-the registry above, and a folder under `services/`, when that work lands.
-
-### Version in production (branch `main`, 24-Oct-2026)
+### Version in production (branch `main`, close of 28-Oct-2026)
 
 | Component | Repository | Commit | Tests (all green) |
 |---|---|---|---|
-| API gateway | `en-monitor-api-gateway` | `c070cec` | 57 |
-| Security service | `en-monitor-security-service` | `334691a` | 660 (22-Oct) |
-| Device service | `en-monitor-device-service` | `f8b8526` | 130 |
-| Measurement service | `en-monitor-measurement-service` | `ee2cb81` | 151 |
-| Backend | `energy-monitor-backend` | `aa9a713` | 481, `ModularityTests` green |
-| Web (React 19 + Vite 8) | [Energy-Monitor-application](https://github.com/Juan-Cortes2045/Energy-Monitor-application) | `e59bece` | — |
-| Android (Expo 57 / React Native) | [Energy-Monitor-Mobile](https://github.com/angelgarcia0/Energy-Monitor-Mobile) | `894b65a` | — |
-| Infrastructure | [energy-monitor-infra](https://github.com/Juan-Cortes2045/energy-monitor-infra) | `eaf961b` | `e2e/device-flow.sh` 21/21, `e2e/measurement-flow.sh` 25/25 |
+| API gateway | `en-monitor-api-gateway` | `0b2c164` | 69 |
+| Security service | `en-monitor-security-service` | `de52c95` | 774 |
+| Device service | `en-monitor-device-service` | `06c1bdc` | 129 |
+| Measurement service | `en-monitor-measurement-service` | `8a9b544` | 151 |
+| Home service | `en-monitor-home-service` | `6a4e396` | 260 |
+| Notification service | `en-monitor-notification-service` | `ecdbc0a` | 235 |
+| Alert service | `en-monitor-alert-service` | `0e65430` | 128 |
+| Recommendation service | `en-monitor-recommendation-service` | `aeeeec5` | 71 |
+| Web (React 19 + Vite 8) | [Energy-Monitor-application](https://github.com/Juan-Cortes2045/Energy-Monitor-application) | `27ad9f0` | 253 (44 files) |
+| Android (Expo 57 / React Native) | [Energy-Monitor-Mobile](https://github.com/angelgarcia0/Energy-Monitor-Mobile) | `58f9cbc` | 78 (8 suites) |
+| Infrastructure | [energy-monitor-infra](https://github.com/Juan-Cortes2045/energy-monitor-infra) | `ceb1543` | `e2e/*.sh` flows |
+
+The backend services add up to 1,817 tests; with the web and the app, 2,148. The commits are the
+ones recorded in `energy-monitor-docs-final/15-enlaces-repositorios-github/enlaces.md`; a few of
+the latest ones (unusual consumption, member photos, help in Settings) were merged into `main` and
+their deployment depended on the approval of each repository's `production` environment.
 
 Every repository has `main` (production) and `dev` (integration); pull requests go to `dev`, and
-from `dev` to `main`. The legacy repository `energy-monitor-devices` (old firmware and broker) is
-no longer used to run anything.
+from `dev` to `main`. All the services, the web and the infra repository have a
+`.github/workflows/ci-cd.yml` pipeline (tests, Docker image, deployment from `main` with approval);
+the app runs type check, lint and tests on every push and queues an EAS build from `main`.
 
 ---
 
@@ -91,7 +93,7 @@ no longer used to run anything.
 | **Port** | 8080 (no published port in Docker; the web container's nginx forwards `/api/` to it) |
 | **Technology** | Java 21, Spring Boot 4.0.8, Spring Cloud Gateway Server Web MVC (Spring Cloud 2025.1.3) |
 | **DB** | None |
-| **Communicates with** | security :8082, device :8084, measurement :8085, backend :8083 |
+| **Communicates with** | the seven services below |
 | **Externally exposed** | Yes — the only API entry point |
 
 **Routes:** see "Route ownership" below.
@@ -103,7 +105,7 @@ no longer used to run anything.
 | Field | Value |
 |-------|-------|
 | **Folder** | `09-microservices/services/02-security-service/` |
-| **Responsibility** | Identity and access: accounts, registration with e-mail verification, login, Sign in with Google, JWT RS256 (access 15 min) + rotating refresh token, HttpOnly session cookies for the web, password recovery, profile, account deletion, RBAC and user administration, support contacts |
+| **Responsibility** | Identity and access: accounts, registration with e-mail verification and acceptance of the terms, login, Sign in with Google, JWT RS256 (access 15 min) + rotating refresh token, HttpOnly session cookies for the web, password recovery, profile (with photo), account deletion, RBAC and user administration, support contacts |
 | **Type** | Supporting service |
 | **Port** | 8082 |
 | **Technology** | Java 21, Spring Boot 4.1.1, Spring Security (OAuth2 resource server), Spring Data JPA, Liquibase, Spring AMQP |
@@ -115,7 +117,8 @@ no longer used to run anything.
 `GET /api/v1/support/contacts` (public).
 
 **Events published** (`energy-monitor.security`, outbox `security_outbox`): `account.registered`,
-`account.administered`, `account.deleted`, `mail.email-verification`, `mail.password-reset`.
+`account.administered`, `account.deleted`, `account.first-signed-in`, `mail.email-verification`,
+`mail.password-reset`, `mail.account-deletion`.
 
 **Events consumed:** none.
 
@@ -139,7 +142,7 @@ no longer used to run anything.
 **Events published** (`energy-monitor.device`, outbox `device_outbox`): `device.linked`,
 `device.unlinked`, `device.connectivity-lost`, `device.connectivity-restored`.
 
-**Events consumed:** `home.deleted` from `energy-monitor-backend` (`energy-monitor.home`).
+**Events consumed:** `home.deleted` from the home service (`energy-monitor.home`).
 
 ---
 
@@ -148,7 +151,7 @@ no longer used to run anything.
 | Field | Value |
 |-------|-------|
 | **Folder** | `09-microservices/services/04-measurement-service/` |
-| **Responsibility** | Measurements: the only subscriber that stores telemetry; history, latest reading, statistics, home consumption (summary and history), consumption levels; internal API for the backend |
+| **Responsibility** | Measurements: the only subscriber that stores telemetry; history, latest reading, statistics, home consumption (summary and history), consumption levels; internal API for the alert and recommendation services |
 | **Type** | Core service |
 | **Port** | 8085 |
 | **Technology** | Java 21, Spring Boot 4.1.1, Spring Data JPA, Liquibase, Spring AMQP, MQTT client |
@@ -167,22 +170,92 @@ invalidation).
 
 ---
 
-### — `energy-monitor-backend` (modular monolith)
+### 05 — `en-monitor-home-service`
 
 | Field | Value |
 |-------|-------|
-| **Folder** | None under `services/` — it is not a microservice. See `05-architecture/overview.md` and its repository's `docs/Architecture.md` |
-| **Responsibility** | Modules `home` (homes, members, thresholds), `alert`, `recommendation`, `notification` (e-mail, Web Push with VAPID, Expo push, in-app administrator notices), plus the proxy packages `security`, `device`, `measurement` (no domain, no tables) |
-| **Port** | 8083 |
-| **Technology** | Java 21, Spring Boot 4.1.1, Spring Modulith |
-| **DB** | Shared MySQL 8.4 — home, alert, recommendation and notification tables |
-| **Externally exposed** | Only through the API gateway (every `/api/v1/**` path not routed elsewhere) |
-| **MQTT** | Not a broker client |
+| **Folder** | `09-microservices/services/05-home-service/` |
+| **Responsibility** | Homes: creation, access code, members, roles, favourites, thresholds (daily or monthly limit), deletion, ownership transfer; answers who may act on a home |
+| **Type** | Core service |
+| **Port** | 8086 |
+| **Technology** | Java 21, Spring Boot 4.1.1, Spring Data JPA, Liquibase, Spring AMQP |
+| **DB** | Shared MySQL 8.4 — home tables |
+| **Bounded Context** | `02-domain/domain-map.md` → Home Management |
+| **Externally exposed** | Only through the API gateway |
 
-**Events published** (`energy-monitor.home`, outbox `home_outbox`): `home.deleted`.
+**Key endpoints:** `/api/v1/homes/**` (except devices and consumption), `/api/v1/home-types/**`.
 
-**Events consumed:** everything on `energy-monitor.security`, the four `device.*` keys and
-`measurement.recorded`.
+**Events published** (`energy-monitor.home`, outbox `home_outbox`): `home.created`,
+`home.member-joined`, `home.member-left`, `home.member-removed`, `home.thresholds-updated`,
+`home.ownership-transferred`, `home.deleted`.
+
+**Events consumed:** `account.deleted` from the security service.
+
+---
+
+### 06 — `en-monitor-notification-service`
+
+| Field | Value |
+|-------|-------|
+| **Folder** | `09-microservices/services/06-notification-service/` |
+| **Responsibility** | Delivery of alerts, recommendations and activity by e-mail, Web Push and mobile push; code mails; preferences; in-app inbox; administrator notices; delivery log |
+| **Type** | Supporting service |
+| **Port** | 8087 |
+| **Technology** | Java 21, Spring Boot 4.1.1, Spring Data JPA, Liquibase, Spring AMQP, Web Push (VAPID), Expo push |
+| **DB** | Shared MySQL 8.4 — notification tables |
+| **Bounded Context** | `02-domain/domain-map.md` → Notification |
+| **Externally exposed** | Only through the API gateway |
+
+**Key endpoints:** `/api/v1/notifications/**`, `/api/v1/admin/notifications/**`.
+
+**Events published:** none (no outbox).
+
+**Events consumed:** `account.*`, `mail.*`, `home.*`, `device.linked`, `device.unlinked`,
+`alert.raised`, `recommendation.created`.
+
+---
+
+### 07 — `en-monitor-alert-service`
+
+| Field | Value |
+|-------|-------|
+| **Folder** | `09-microservices/services/07-alert-service/` |
+| **Responsibility** | Alerts: threshold, unusual consumption, limit, connectivity and linked-device; inbox (list, read, delete) |
+| **Type** | Core service |
+| **Port** | 8088 |
+| **Technology** | Java 21, Spring Boot 4.1.1, Spring Data JPA, Liquibase, Spring AMQP |
+| **DB** | Shared MySQL 8.4 — alert tables |
+| **Bounded Context** | `02-domain/domain-map.md` → Alerts |
+| **Externally exposed** | Only through the API gateway |
+
+**Key endpoints:** `/api/v1/alerts/**`.
+
+**Events published** (`energy-monitor.alert`, outbox `alert_outbox`): `alert.raised`.
+
+**Events consumed:** `measurement.recorded`; `device.linked`, `device.unlinked`,
+`device.connectivity-lost`, `device.connectivity-restored`.
+
+---
+
+### 08 — `en-monitor-recommendation-service`
+
+| Field | Value |
+|-------|-------|
+| **Folder** | `09-microservices/services/08-recommendation-service/` |
+| **Responsibility** | Recommendations: five saving rules evaluated every hour per home; inbox (list, read, delete) |
+| **Type** | Core service |
+| **Port** | 8089 |
+| **Technology** | Java 21, Spring Boot 4.1.1, Spring Data JPA, Liquibase, Spring AMQP |
+| **DB** | Shared MySQL 8.4 — recommendation tables |
+| **Bounded Context** | `02-domain/domain-map.md` → Recommendations |
+| **Externally exposed** | Only through the API gateway |
+
+**Key endpoints:** `/api/v1/recommendations/**`.
+
+**Events published** (`energy-monitor.recommendation`, outbox `recommendation_outbox`):
+`recommendation.created`.
+
+**Events consumed:** none (it polls the internal APIs every hour).
 
 ---
 
@@ -193,10 +266,13 @@ invalidation).
 | `/api/v1/auth/**`, `/api/v1/admin/users/**`, `/api/v1/admin/roles/**`, `/api/v1/support/**` | security :8082 |
 | `/api/v1/homes/{homeId}/devices/**`, `/api/v1/appliance-types/**` | device :8084 |
 | `/api/v1/measurements/**`, `/api/v1/consumption-levels/**`, `/api/v1/homes/{homeId}/consumption/**` | measurement :8085 |
-| any other `/api/v1/**` (homes, members, thresholds, alerts, recommendations, notifications, administrator notices) | backend :8083 |
+| the rest of `/api/v1/homes/**`, `/api/v1/home-types/**` | home :8086 |
+| `/api/v1/notifications/**`, `/api/v1/admin/notifications/**` | notification :8087 |
+| `/api/v1/alerts/**` | alert :8088 |
+| `/api/v1/recommendations/**` | recommendation :8089 |
 | `/internal/**` | never forwarded by the gateway |
 
-The device and measurement routes are matched before the backend's catch-all. The clients call
+The device and consumption routes are matched before the general home route, so the clients call
 the same paths as before the migration.
 
 ---
@@ -205,19 +281,22 @@ the same paths as before the migration.
 
 | Source | Destination | Channel | Type | Description |
 |---|---|---|---|---|
-| gateway | security, device, measurement, backend | HTTP | Synchronous | Forwards client requests after CORS, token check and rate limit |
-| backend | security | `/internal/users/{id}/permissions`, `/internal/users/profiles`, `/internal/administrators` | Synchronous | Permissions, profiles, administrators (cached) |
-| security | backend | `/internal/accounts/{id}/deletion-check` | Synchronous | May the account be deleted? |
-| backend | device | `/internal/devices/{id}`, `/internal/homes/{homeId}/devices` | Synchronous | Device reads (cached 30 s; stale copy up to 1 h) |
-| device | backend | `/internal/homes/{homeId}/access?userId=` | Synchronous | Member / owner of the home? |
-| measurement | backend | `/internal/homes/{homeId}/access?userId=`, `/internal/homes/{homeId}/thresholds` | Synchronous | Home access and limits |
-| measurement | device | `/internal/devices/{id}`, `/internal/homes/{homeId}/devices` | Synchronous | Home of a device, devices of a home (cached) |
-| backend | measurement | `/internal/consumption-levels`, `/internal/measurements/hourly-energy`, `/internal/measurements/reporting-devices` | Synchronous | Levels (cached 10 min), hourly energy for limit alerts and recommendations |
+| gateway | the seven services | HTTP | Synchronous | Forwards client requests after CORS, token check and rate limit |
+| security | home | `/internal/accounts/{id}/deletion-check` | Synchronous | May the account be deleted? |
+| home | security | `/internal/users/profiles` | Synchronous | Names (and photos) of the members |
+| device, measurement, alert, recommendation | home | `/internal/homes/{homeId}/access?userId=` | Synchronous | Member / owner of the home? (never cached) |
+| measurement, alert, recommendation | home | `/internal/homes/{homeId}/thresholds` | Synchronous | Daily and monthly limits |
+| notification | home | `/internal/homes/{homeId}` | Synchronous | Name and members of a home |
+| notification | security | `/internal/users/profiles`, `/internal/users/{id}/permissions`, `/internal/administrators` | Synchronous | Names and e-mails, `USER.READ`, administrators (cached) |
+| measurement, alert, recommendation, notification | device | `/internal/devices/{id}`, `/internal/homes/{homeId}/devices` | Synchronous | Device reads (cached 30 s; stale copy up to 1 h) |
+| alert, recommendation | measurement | `/internal/consumption-levels`, `/internal/measurements/hourly-energy`, `/internal/measurements/reporting-devices` | Synchronous | Levels (cached), hourly energy, reporting devices |
 | Mosquitto | device | `/internal/mqtt/auth/user`, `/internal/mqtt/auth/acl` | Synchronous | Authenticate and authorise every MQTT client (decisions cached 5 min) |
-| security | backend | RabbitMQ `energy-monitor.security` | Asynchronous | Administrator notices, account clean-up, e-mail delivery |
-| backend | device | RabbitMQ `energy-monitor.home` (`home.deleted`) | Asynchronous | Unlink the home's modules and send them `unlink` |
-| device | backend, measurement | RabbitMQ `energy-monitor.device` | Asynchronous | CONNECTIVITY alerts and caches (measurement: linked/unlinked only) |
-| measurement | backend | RabbitMQ `energy-monitor.measurement` (`measurement.recorded`) | Asynchronous | Threshold, limit and "device linked" alerts |
+| security | notification, home | RabbitMQ `energy-monitor.security` | Asynchronous | `account.*`, `mail.*`: administrator notices, code mails, account clean-up |
+| home | device, notification | RabbitMQ `energy-monitor.home` | Asynchronous | `home.deleted` unlinks the modules; `home.*` activity |
+| device | alert, measurement, notification | RabbitMQ `energy-monitor.device` | Asynchronous | CONNECTIVITY alerts, caches (measurement: linked/unlinked only), activity |
+| measurement | alert | RabbitMQ `energy-monitor.measurement` (`measurement.recorded`) | Asynchronous | Threshold, limit, unusual-consumption and "device linked" alerts |
+| alert | notification | RabbitMQ `energy-monitor.alert` (`alert.raised`) | Asynchronous | Delivery of the alert |
+| recommendation | notification | RabbitMQ `energy-monitor.recommendation` (`recommendation.created`) | Asynchronous | Delivery of the recommendation |
 
 Internal REST is accepted only from loopback or the Docker network (`172.16.0.0/12`) **and** with
 `X-Internal-Token` (`INTERNAL_API_TOKEN`), compared in constant time; Mosquitto's
@@ -232,10 +311,13 @@ events, never directly in the database. All tables live in the one shared schema
 
 | Owner | Tables |
 |---|---|
-| `en-monitor-security-service` | `person`, `user`, `user_configuration`, `user_session`, `refresh_token`, `password_reset_token`, `password_policy`, `security_configuration`, `login_error_log`, `system_role`, `permission`, `system_role_permission`, `user_system_role`, `audit_log`, `security_outbox` |
+| `en-monitor-security-service` | `person`, `user`, `user_configuration`, `user_session`, `refresh_token`, `password_reset_token`, `password_policy`, `security_configuration`, `login_error_log`, `system_role`, `permission`, `system_role_permission`, `user_system_role`, `audit_log`, `pending_registration`, `security_outbox` |
 | `en-monitor-device-service` | `appliance_type`, `device`, `device_home`, `device_status_log`, `device_outbox` |
 | `en-monitor-measurement-service` | `measurement`, `consumption_level`, `measurement_outbox` |
-| `energy-monitor-backend` | `home`, `home_type`, `home_thresholds`, `user_home`, `home_outbox`, `alert`, `recommendation`, `notification`, `notification_preference`, `push_subscription`, `push_device` |
+| `en-monitor-home-service` | `home`, `home_type`, `home_thresholds`, `user_home`, `home_outbox` |
+| `en-monitor-notification-service` | `notification`, `notification_preference`, `push_subscription`, `push_device` |
+| `en-monitor-alert-service` | `alert`, `alert_outbox` |
+| `en-monitor-recommendation-service` | `recommendation`, `recommendation_outbox` |
 
 ---
 
@@ -255,8 +337,7 @@ events, never directly in the database. All tables live in the one shared schema
 
 - Architecture and communication patterns → `05-architecture/overview.md`
 - Deployment → `05-architecture/deployment.md`
-- API contracts → `07-api/contracts/openapi/` (`api-gateway.yaml`, `security-service.yaml`,
-  `device-service.yaml`, `measurement-service.yaml`)
+- API contracts → `07-api/contracts/openapi/` (one file per service plus `api-gateway.yaml`)
 - Dependency map and failure effects → `09-microservices/dependency-map.md`
 - System events → `02-domain/domain-events.md`
 - Tables → `06-data/models.md`
