@@ -35,8 +35,8 @@ What the system **DOES build and maintain**:
 
 | External component   | Integration type | Purpose                                                                              |
 | -------------------- | ---------------- | ------------------------------------------------------------------------------------ |
-| ESP32 + PZEM-004T V3 | MQTT (publish)   | The device publishes measurements to the backend; the backend never calls the device |
-| Eclipse Mosquitto    | MQTT broker      | Runs in `devices` repo; authenticates devices via backend HTTP endpoint              |
+| ESP32 + PZEM-004T V3 | MQTT (publish)   | The device publishes measurements to the broker; only the device service publishes to a device |
+| Eclipse Mosquitto    | MQTT broker      | Runs in `energy-monitor-infra`; authenticates devices through the device service's HTTP endpoint              |
 | SMTP server          | Email            | For password reset, alerts, recommendations (configured via env vars)                |
 | VAPID / Web Push     | Push notifications | Browser push for alerts and recommendations                                         |
 
@@ -101,7 +101,7 @@ This project has no functional dependency on another system or team. Other SENA 
 
 | Dependency                                                                                                 | Team / Provider          | Required date                                       | Status         |
 | ---------------------------------------------------------------------------------------------------------- | ------------------------ | --------------------------------------------------- | -------------- |
-| Database migrations (Liquibase, single changelog in backend repo, logically organized by module)           | Internal                 | Needed before any module connects to a real schema | ✅ Done        |
+| Database migrations (Liquibase, one changelog folder per service, logically organized by context)           | Internal                 | Needed before any module connects to a real schema | ✅ Done        |
 | PZEM-004T V3 hardware units                                                                                | Internal procurement     | October 01, 2026                                  | 🟡 In progress |
 | Let's Encrypt TLS certificates for MQTT broker                                                             | Internal (certbot)       | Before production deploy                            | 🟡 Planned     |
 | VAPID keys for Web Push                                                                                    | Internal (openssl)       | Before production deploy                            | 🟡 Planned     |
