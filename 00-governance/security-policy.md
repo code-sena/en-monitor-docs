@@ -72,8 +72,8 @@ Permission: [resource]:[action]
 
 ### Internal service-to-service communication
 
-As implemented (24-Oct-2026):
-- Inside `energy-monitor-backend` (modular monolith), modules communicate in process through application events and calls across module boundaries allowed by Spring Modulith.
+As implemented (28-Oct-2026):
+- Every context is its own service; there is no in-process communication between contexts (the modular monolith that had it was retired).
 - Between services, internal REST under `/internal/**` is accepted only from loopback or the Docker network **and** with the shared `X-Internal-Token` header (`INTERNAL_API_TOKEN`), compared in constant time; the API gateway never forwards `/internal/**`. Mosquitto's `/internal/mqtt/auth/**` calls are restricted by network only.
 - Events between services go through RabbitMQ (credentials `RABBITMQ_*`), reachable only inside Docker.
 - There is no mTLS; traffic inside the Docker network is plain HTTP/AMQP, and HTTPS is terminated at the host's Nginx.

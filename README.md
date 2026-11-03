@@ -10,7 +10,7 @@ each section, why it matters, and how every document relates to the others.
 
 ---
 
-## EnergyMonitor at a glance (24-Oct-2026)
+## EnergyMonitor at a glance (28-Oct-2026)
 
 EnergyMonitor measures the electricity each appliance in a home consumes (ESP32 + PZEM-004T V3
 modules over MQTT) and turns it into history, alerts and recommendations on a web app and an
@@ -22,7 +22,10 @@ Android app. It is in production at `https://energy-monitor.tech`.
 | `en-monitor-security-service` | 8082 | Security context: accounts, login, JWT, sessions, RBAC | In production |
 | `en-monitor-device-service` | 8084 | Devices context: linking, credentials, MQTT auth/ACL, commands, connectivity | In production |
 | `en-monitor-measurement-service` | 8085 | Monitoring and Measurements context: readings, history, statistics, consumption | In production |
-| `energy-monitor-backend` | 8083 | Modular monolith (Spring Modulith) with Home Management, Alerts, Recommendations and Notification | In production; migration of these four contexts to microservices in progress |
+| `en-monitor-home-service` | 8086 | Home Management context: homes, members, thresholds, ownership | In production |
+| `en-monitor-notification-service` | 8087 | Notification context: e-mail, Web Push, mobile push, inbox | In production |
+| `en-monitor-alert-service` | 8088 | Alerts context: threshold, unusual-consumption, limit, connectivity | In production |
+| `en-monitor-recommendation-service` | 8089 | Recommendations context: hourly saving rules | In production |
 
 Services talk over internal REST (`/internal/**`, `X-Internal-Token`) and RabbitMQ topic
 exchanges with a transactional outbox per service; they share one MySQL 8.4 schema in which each

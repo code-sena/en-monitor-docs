@@ -3,7 +3,7 @@
 > Defines the system's environments, their purposes, access, and key configurations.
 > **Rule:** If you need to access production directly, something is wrong in the process.
 >
-> State at 24-Oct-2026. Source: README and `deploy/deploy.sh` of `energy-monitor-infra`.
+> State at 28-Oct-2026. Source: README and `deploy/deploy.sh` of `energy-monitor-infra`.
 
 ---
 
@@ -37,7 +37,7 @@ and the JWT key pair in `JWT_KEYS_DIR`.
 
 ## CI/CD Pipeline
 
-Every repository (gateway, security, device, measurement, backend, web, infra) has
+Every repository (gateway, the seven services, web, infra) has
 `.github/workflows/ci-cd.yml`:
 
 ```
@@ -58,8 +58,9 @@ Developer
 │ CD (push to main or "Run workflow"), after the tests and the         │
 │ approval of the production environment                              │
 │  SSH to the VPS with a key restricted to                             │
-│  infra/deploy/deploy.sh backend|security|device|measurement|         │
-│                         gateway|frontend|infra                       │
+│  infra/deploy/deploy.sh gateway|security|device|measurement|home|    │
+│                         notification|alert|recommendation|frontend|  │
+│                         infra                                        │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 

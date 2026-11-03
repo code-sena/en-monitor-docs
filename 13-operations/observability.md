@@ -13,14 +13,14 @@
 
 ---
 
-## Current state in EnergyMonitor (24-Oct-2026)
+## Current state in EnergyMonitor (28-Oct-2026)
 
 What is actually in place in production, as opposed to the target standard described in the rest
 of this document:
 
 | Pillar | In place | Not in place |
 |---|---|---|
-| Health | Every Java component (`en-monitor-api-gateway`, `en-monitor-security-service`, `en-monitor-device-service`, `en-monitor-measurement-service`, `energy-monitor-backend`) exposes `/actuator/health`, used as the container `healthcheck`; for the security service, the device service and the backend it includes MySQL and RabbitMQ. `deploy.sh` waits for all five to be `healthy`, the web to answer 200 and `/api/v1/homes` to answer 401 through the gateway | — |
+| Health | Every Java component (`en-monitor-api-gateway`, `en-monitor-security-service`, `en-monitor-device-service`, `en-monitor-measurement-service`, `en-monitor-home-service`, `en-monitor-notification-service`, `en-monitor-alert-service`, `en-monitor-recommendation-service`) exposes `/actuator/health`, used as the container `healthcheck`; for the services that use them it includes MySQL and RabbitMQ. `deploy.sh` waits for all eight to be `healthy`, the web to answer 200 and `/api/v1/homes` to answer 401 through the gateway | — |
 | Logs | Spring Boot default logging, read with `docker compose logs <service>` on the host | Structured JSON logs, central aggregation (ELK, Loki) |
 | Metrics | RabbitMQ management console (queues, dead-letter queues), reachable only through an SSH tunnel | Prometheus, Grafana dashboards, RED metrics per service |
 | Traces | — | OpenTelemetry or any correlation id across services |
