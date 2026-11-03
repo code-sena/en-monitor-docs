@@ -17,7 +17,7 @@ possibly a scheduled job or a message consumer later) without duplicating rules.
 
 **When NOT to use it:** for a throwaway script or a service so small that the indirection of
 ports/adapters costs more than the coupling it prevents — this project does not have that case,
-since every service and backend module has real business rules and at least two adapters (a web
+since every service has real business rules and at least two adapters (a web
 adapter and a persistence adapter).
 
 **Project example:** every microservice separates a **domain model** (framework-free business
@@ -94,10 +94,9 @@ answer before continuing — that is a direct call, not an Observer relationship
 
 **Project example:** a new `Measurement` notifies subscribers without coupling ingestion to the
 reaction it triggers (`01-context/glossary.md`). Across processes this is realized as the
-`measurement.recorded` RabbitMQ message published by `en-monitor-measurement-service`; inside
-`energy-monitor-backend` the `measurement` proxy republishes it as the in-memory
-`MeasurementRecorded` Spring event, which the `alert` module observes
-(`02-domain/domain-events.md`) — the same decoupling purpose at two different scopes.
+`measurement.recorded` RabbitMQ message published by `en-monitor-measurement-service`; the
+alert service consumes it and raises the alert (`02-domain/domain-events.md`), and the notification
+service consumes the resulting `alert.raised` — the producer never waits for either.
 
 ---
 
@@ -162,9 +161,9 @@ depth and no runbook for draining it is a queue nobody will ever look at again.
 
 **Project example:** every RabbitMQ consumer queue is durable and has a dead-letter queue; a
 message that fails three attempts (1, 2 and 4 s apart in the device and measurement services) is
-moved there, for example to `energy-monitor-backend.measurement.recorded.dlq` or
+moved there, for example to `alert-service.measurement.recorded.dlq` or
 `device-service.device.home-deleted.dlq`. There is no automated alert on a non-empty DLQ yet; the
-end-to-end test `infra/e2e/measurement-flow.sh` checks that the backend's queue and its `.dlq` end
+end-to-end test `infra/e2e/measurement-flow.sh` checks that the alert service's queue and its `.dlq` end
 empty.
 
 ---

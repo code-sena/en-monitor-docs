@@ -1,12 +1,11 @@
 # System Architecture Overview
 
-> **State at 24-Oct-2026, in production at `https://energy-monitor.tech`.** The backend started
-> as one modular monolith with seven bounded contexts. Three of them — Security, Devices and
-> Monitoring/Measurements — now run as their own microservices behind an API gateway. The other
-> four — Home Management, Alerts, Recommendations and Notification — still run inside
-> `energy-monitor-backend`, a Spring Modulith modular monolith. Migrating those four to
-> microservices is **in progress** (Miguel Ángel García Artunduaga); their service names, ports
-> and dates are not defined yet and are not described here.
+> **State at 28-Oct-2026, in production at `https://energy-monitor.tech`.** The backend started
+> as one modular monolith with seven bounded contexts. The migration finished on 28-Oct-2026:
+> every bounded context — Security, Devices, Monitoring/Measurements, Home Management,
+> Notification, Alerts and Recommendations — runs as its own microservice behind an API
+> gateway, and the monolith `energy-monitor-backend` was retired (it only keeps the ESP32
+> firmware and its history).
 
 ---
 
@@ -52,7 +51,10 @@ C4Container
         Container(security, "en-monitor-security-service :8082", "Spring Boot 4.1.1", "Accounts, login, JWT, sessions, RBAC, audit")
         Container(device, "en-monitor-device-service :8084", "Spring Boot 4.1.1", "Devices, credentials, broker auth/ACL, commands, connectivity")
         Container(measurement, "en-monitor-measurement-service :8085", "Spring Boot 4.1.1", "Readings, history, statistics, home consumption, levels")
-        Container(backend, "energy-monitor-backend :8083", "Spring Boot 4.1.1 + Spring Modulith", "home, alert, recommendation, notification")
+        Container(home, "en-monitor-home-service :8086", "Spring Boot 4.1.1", "Homes, members, thresholds, ownership")
+        Container(notification, "en-monitor-notification-service :8087", "Spring Boot 4.1.1", "E-mail, Web Push, mobile push, inbox")
+        Container(alert, "en-monitor-alert-service :8088", "Spring Boot 4.1.1", "Threshold, unusual-consumption, limit and connectivity alerts")
+        Container(recommendation, "en-monitor-recommendation-service :8089", "Spring Boot 4.1.1", "Hourly saving rules")
     }
 
     ContainerDb(mysql, "MySQL 8.4", "Schema energy_monitor", "One shared schema, each service owns its tables — ADR-003")
@@ -67,30 +69,46 @@ C4Container
     Rel(apiGateway, security, "Routes")
     Rel(apiGateway, device, "Routes")
     Rel(apiGateway, measurement, "Routes")
-    Rel(apiGateway, backend, "Routes the rest of /api/v1/**")
+    Rel(apiGateway, home, "Routes")
+    Rel(apiGateway, notification, "Routes")
+    Rel(apiGateway, alert, "Routes")
+    Rel(apiGateway, recommendation, "Routes")
 
     Rel(measuringDevice, mqtt, "Telemetry, status / commands", "MQTT TLS 8883")
     Rel(mqtt, device, "Authenticates every client", "POST /internal/mqtt/auth/user, /acl")
     Rel(device, mqtt, "Reads telemetry and status, publishes commands")
     Rel(measurement, mqtt, "Reads telemetry")
 
-    Rel(backend, security, "Permissions, profiles, administrators", "/internal/**")
-    Rel(backend, device, "Device reads", "/internal/**")
-    Rel(backend, measurement, "Levels, hourly energy", "/internal/**")
-    Rel(device, backend, "Home access", "/internal/**")
-    Rel(measurement, backend, "Home access, thresholds", "/internal/**")
+    Rel(device, home, "Home access", "/internal/**")
+    Rel(measurement, home, "Home access, thresholds", "/internal/**")
+    Rel(alert, home, "Home access, thresholds", "/internal/**")
+    Rel(recommendation, home, "Home access, thresholds", "/internal/**")
+    Rel(notification, home, "Name and members", "/internal/**")
+    Rel(home, security, "Member profiles", "/internal/**")
+    Rel(security, home, "Account deletion check", "/internal/**")
+    Rel(notification, security, "Profiles, permissions, administrators", "/internal/**")
     Rel(measurement, device, "Device reads", "/internal/**")
-    Rel(security, backend, "Account deletion check", "/internal/**")
+    Rel(alert, device, "Device reads", "/internal/**")
+    Rel(recommendation, device, "Device reads", "/internal/**")
+    Rel(notification, device, "Device reads", "/internal/**")
+    Rel(alert, measurement, "Levels, hourly energy", "/internal/**")
+    Rel(recommendation, measurement, "Hourly energy", "/internal/**")
 
     Rel(security, rabbit, "account.*, mail.*")
-    Rel(device, rabbit, "device.*")
+    Rel(home, rabbit, "home.*; consumes account.deleted")
+    Rel(device, rabbit, "device.*; consumes home.deleted")
     Rel(measurement, rabbit, "measurement.recorded")
-    Rel(backend, rabbit, "home.deleted; consumes the others")
+    Rel(alert, rabbit, "alert.raised; consumes measurement and device events")
+    Rel(recommendation, rabbit, "recommendation.created")
+    Rel(notification, rabbit, "Consumes account, mail, home, device, alert and recommendation events")
 
     Rel(security, mysql, "Its tables")
     Rel(device, mysql, "Its tables")
     Rel(measurement, mysql, "Its tables")
-    Rel(backend, mysql, "Its tables")
+    Rel(home, mysql, "Its tables")
+    Rel(notification, mysql, "Its tables")
+    Rel(alert, mysql, "Its tables")
+    Rel(recommendation, mysql, "Its tables")
 ```
 
 > Both diagrams use the Mermaid `C4Context`/`C4Container` notation. If the renderer used to view
@@ -106,8 +124,11 @@ C4Container
 | `en-monitor-api-gateway` | 8080 | Single API entry point: CORS, access-token validation, `em_access` cookie to bearer token, rate limit of the public account `POST`s (20 per address and path per minute), routing, refusal of `/internal/**`, 503/504 answers | Java 21, Spring Boot 4.0.8, Spring Cloud Gateway Server Web MVC (Spring Cloud 2025.1.3) | None |
 | `en-monitor-security-service` | 8082 | Accounts, registration with e-mail verification, login, Sign in with Google, JWT RS256 (15 min) + rotating refresh token, HttpOnly session cookies for the web, password recovery, profile, account deletion, RBAC and user administration, support contacts | Java 21, Spring Boot 4.1.1 | Shared MySQL — security tables |
 | `en-monitor-device-service` | 8084 | Device linking, editing, credential reissue (API key stored as SHA-256 hash), unlinking, appliance catalogue, MQTT authentication and ACL, MQTT commands, connectivity (OFFLINE after 150 s without data) | Java 21, Spring Boot 4.1.1 | Shared MySQL — device tables |
-| `en-monitor-measurement-service` | 8085 | The only subscriber that stores telemetry; history, latest reading, statistics, home consumption (summary and history), consumption levels; publishes `measurement.recorded`; internal API for the backend | Java 21, Spring Boot 4.1.1 | Shared MySQL — measurement tables |
-| `energy-monitor-backend` | 8083 | Modular monolith (Spring Modulith): `home`, `alert`, `recommendation`, `notification` (e-mail, Web Push, Expo push, in-app administrator notices), plus thin proxy packages `security`, `device`, `measurement`. Not an MQTT client | Java 21, Spring Boot 4.1.1, Spring Modulith | Shared MySQL — home, alert, recommendation, notification tables |
+| `en-monitor-measurement-service` | 8085 | The only subscriber that stores telemetry; history, latest reading, statistics, home consumption (summary and history), consumption levels; publishes `measurement.recorded`; internal API for the alert and recommendation services | Java 21, Spring Boot 4.1.1 | Shared MySQL — measurement tables |
+| `en-monitor-home-service` | 8086 | Homes, access code, members, roles, favourites, thresholds (daily or monthly limit), deletion, ownership transfer; answers who may act on a home; publishes `home.*` | Java 21, Spring Boot 4.1.1 | Shared MySQL — home tables |
+| `en-monitor-notification-service` | 8087 | Delivery of alerts, recommendations and activity by e-mail, Web Push and mobile push; the only service that sends e-mail (including the verification codes); preferences; in-app inbox; administrator notices | Java 21, Spring Boot 4.1.1 | Shared MySQL — notification tables |
+| `en-monitor-alert-service` | 8088 | Threshold, unusual-consumption, limit, connectivity and linked-device alerts; inbox; publishes `alert.raised` | Java 21, Spring Boot 4.1.1 | Shared MySQL — alert tables |
+| `en-monitor-recommendation-service` | 8089 | Five saving rules evaluated every hour; inbox; publishes `recommendation.created` | Java 21, Spring Boot 4.1.1 | Shared MySQL — recommendation tables |
 
 Each component has its own repository, its own GitHub Actions workflow and its own Docker image
 (see `05-architecture/deployment.md`). Inside each service the code follows hexagonal
@@ -122,10 +143,10 @@ gateway has no domain and is organised by concern (`routing`, `security`, `ratel
 | Security | `en-monitor-security-service` | Microservice, in production |
 | Devices | `en-monitor-device-service` | Microservice, in production |
 | Monitoring and Measurements | `en-monitor-measurement-service` | Microservice, in production |
-| Home Management | `energy-monitor-backend` (`home`) | In the monolith; migration in progress |
-| Alerts | `energy-monitor-backend` (`alert`) | In the monolith; migration in progress |
-| Recommendations | `energy-monitor-backend` (`recommendation`) | In the monolith; migration in progress |
-| Notification | `energy-monitor-backend` (`notification`) | In the monolith; migration in progress |
+| Home Management | `en-monitor-home-service` | Microservice, in production |
+| Alerts | `en-monitor-alert-service` | Microservice, in production |
+| Recommendations | `en-monitor-recommendation-service` | Microservice, in production |
+| Notification | `en-monitor-notification-service` | Microservice, in production |
 
 The two client applications are not microservices; both call the gateway, and the migration did
 not change the public API paths they use:
@@ -147,7 +168,10 @@ not change the public API paths they use:
   | `/api/v1/auth/**`, `/api/v1/admin/users/**`, `/api/v1/admin/roles/**`, `/api/v1/support/**` | security :8082 |
   | `/api/v1/homes/{homeId}/devices/**`, `/api/v1/appliance-types/**` | device :8084 |
   | `/api/v1/measurements/**`, `/api/v1/consumption-levels/**`, `/api/v1/homes/{homeId}/consumption/**` | measurement :8085 |
-  | any other `/api/v1/**` (homes, members, thresholds, alerts, recommendations, notifications, administrator notices) | backend :8083 |
+  | the rest of `/api/v1/homes/**`, `/api/v1/home-types/**` | home :8086 |
+  | `/api/v1/notifications/**`, `/api/v1/admin/notifications/**` | notification :8087 |
+  | `/api/v1/alerts/**` | alert :8088 |
+  | `/api/v1/recommendations/**` | recommendation :8089 |
   | `/internal/**` | never forwarded |
 
   The gateway validates the token (RS256, issuer, expiry) and each service validates it again
@@ -161,13 +185,14 @@ not change the public API paths they use:
 
   | Caller → callee | Endpoints | Purpose |
   |---|---|---|
-  | backend → security | `GET /internal/users/{id}/permissions`, `POST /internal/users/profiles`, `GET /internal/administrators` | Permissions, profiles, administrators (cached) |
-  | security → backend | `GET /internal/accounts/{id}/deletion-check` | May the account be deleted? |
-  | backend → device | `GET /internal/devices/{id}`, `GET /internal/homes/{homeId}/devices` | Device reads (cached 30 s; stale copy up to 1 h) |
-  | device → backend | `GET /internal/homes/{homeId}/access?userId=` | Is the caller a member / the owner of the home? |
-  | measurement → backend | `GET /internal/homes/{homeId}/access?userId=`, `GET /internal/homes/{homeId}/thresholds` | Home access and limits |
-  | measurement → device | `GET /internal/devices/{id}`, `GET /internal/homes/{homeId}/devices` | Home of a device, devices of a home (cached) |
-  | backend → measurement | `GET /internal/consumption-levels`, `GET /internal/measurements/hourly-energy`, `GET /internal/measurements/reporting-devices` | Classify readings (levels cached 10 min), hourly energy for limit alerts and recommendations |
+  | home → security | `POST /internal/users/profiles` | Names (and photos) of the members of a home |
+  | notification → security | `POST /internal/users/profiles`, `GET /internal/users/{id}/permissions`, `GET /internal/administrators` | Names and e-mails, `USER.READ`, administrators (cached) |
+  | security → home | `GET /internal/accounts/{id}/deletion-check` | May the account be deleted? |
+  | device, measurement, alert, recommendation → home | `GET /internal/homes/{homeId}/access?userId=` | Is the caller a member / the owner of the home? (never cached) |
+  | measurement, alert, recommendation → home | `GET /internal/homes/{homeId}/thresholds` | Daily and monthly limits |
+  | notification → home | `GET /internal/homes/{homeId}` | Name and members of a home |
+  | measurement, alert, recommendation, notification → device | `GET /internal/devices/{id}`, `GET /internal/homes/{homeId}/devices` | Device reads (cached 30 s; stale copy up to 1 h) |
+  | alert, recommendation → measurement | `GET /internal/consumption-levels`, `GET /internal/measurements/hourly-energy`, `GET /internal/measurements/reporting-devices` | Classify readings (levels cached), hourly energy for the limit, unusual-consumption and recommendation rules |
   | Mosquitto → device | `POST /internal/mqtt/auth/user`, `POST /internal/mqtt/auth/acl` | Authenticate and authorise every MQTT client |
 
 - **Async (RabbitMQ 4.1 topic exchanges + transactional outbox, `ADR-008`):** the outbox row is
@@ -177,32 +202,30 @@ not change the public API paths they use:
 
   | Exchange / routing keys | Producer (outbox) | Consumer | Effect |
   |---|---|---|---|
-  | `energy-monitor.security` / `account.registered`, `account.administered`, `account.deleted`, `mail.email-verification`, `mail.password-reset` | security (`security_outbox`) | backend | In-app notices to administrators, clean-up of deleted accounts, e-mail delivery (only the backend sends e-mail) |
-  | `energy-monitor.home` / `home.deleted` | backend (`home_outbox`) | device | Unlinks the home's modules and sends them `unlink` |
-  | `energy-monitor.device` / `device.linked`, `device.unlinked`, `device.connectivity-lost`, `device.connectivity-restored` | device (`device_outbox`) | backend (CONNECTIVITY alerts, cache); measurement (cache, linked/unlinked only) | |
-  | `energy-monitor.measurement` / `measurement.recorded` | measurement (`measurement_outbox`, delivered rows purged after 7 days) | backend | Republished in memory as `MeasurementRecorded`: threshold, limit and "device linked" alerts |
+  | `energy-monitor.security` / `account.registered`, `account.administered`, `account.deleted`, `account.first-signed-in`, `mail.email-verification`, `mail.password-reset`, `mail.account-deletion` | security (`security_outbox`) | notification; home (`account.deleted` only) | In-app notices to administrators, welcome, e-mail delivery (only the notification service sends e-mail); home: drops the memberships and the homes the account alone owned |
+  | `energy-monitor.home` / `home.created`, `home.member-joined`, `home.member-left`, `home.member-removed`, `home.thresholds-updated`, `home.ownership-transferred`, `home.deleted` | home (`home_outbox`) | notification (all); device (`home.deleted`) | Activity notifications; the device service unlinks the home's modules and sends them `unlink` |
+  | `energy-monitor.device` / `device.linked`, `device.unlinked`, `device.connectivity-lost`, `device.connectivity-restored` | device (`device_outbox`) | alert; measurement (cache, linked/unlinked only); notification (linked/unlinked) | CONNECTIVITY alerts and the linked-device alert; caches; activity |
+  | `energy-monitor.measurement` / `measurement.recorded` | measurement (`measurement_outbox`, delivered rows purged after 7 days) | alert | Threshold, limit, unusual-consumption and "device linked" alerts |
+  | `energy-monitor.alert` / `alert.raised` | alert (`alert_outbox`) | notification | Delivery of the alert by e-mail and push |
+  | `energy-monitor.recommendation` / `recommendation.created` | recommendation (`recommendation_outbox`) | notification | Delivery of the recommendation |
 
-- **In-process (inside `energy-monitor-backend`):** Spring application events `AlertRaised` and
-  `RecommendationCreated` (→ `notification`), `MeasurementRecorded` and
-  `DeviceConnectivityLost/Restored` (republished by the proxy packages when the RabbitMQ message
-  arrives → `alert`), and `HomeOwnershipTransferred`. `ModularityTests` (Spring Modulith) checks
-  the module boundaries.
+- **In-process:** each service uses Spring application events inside its own process only; no
+  event crosses a service boundary except through RabbitMQ. The pre-migration `ModularityTests`
+  (Spring Modulith) belonged to the retired monolith.
 
 - **Device channel (MQTT, `ADR-007`):** ESP32 modules publish
   `energy-monitor/devices/{deviceId}/telemetry` (every 60 s) and `/status` (retained, with last
   will) over TLS on 8883, and receive `/command`. The device service reads telemetry and status
   and is the only publisher of commands; the measurement service reads telemetry only and stores
-  each reading. The backend is not an MQTT client.
+  each reading. No other service is an MQTT client.
 
 ---
 
 ## Open questions
 
-These are gaps found while writing this document, not decisions made here:
-
-| Question | Where it should be resolved |
-|---|---|
-| Service names, ports, repositories and data ownership for Home Management, Alerts, Recommendations and Notification once they leave the monolith (work in progress by Miguel Ángel García Artunduaga) | `09-microservices/service-catalog.md` and this document, when that migration lands |
+None at the moment. The questions this section carried while the migration was in progress (names,
+ports, repositories and data ownership of the four remaining contexts) were resolved on
+28-Oct-2026 in `09-microservices/service-catalog.md`.
 
 ---
 
@@ -219,7 +242,7 @@ These are gaps found while writing this document, not decisions made here:
 - Event transport → `ADR-008-rabbitmq-transactional-outbox.md` (supersedes `ADR-002`)
 - Migrations → `ADR-009-liquibase-changelogs-per-service.md` (supersedes `ADR-006`)
 - Internal API between services → `ADR-012-internal-service-api.md`
-- Modular monolith and incremental extraction → `ADR-013-modular-monolith-incremental-extraction.md`
+- Modular monolith and incremental extraction (completed 28-Oct-2026) → `ADR-013-modular-monolith-incremental-extraction.md`
 - Table ownership → `06-data/models.md`
 - Service sheets → `09-microservices/service-catalog.md`
 - How this is deployed → `05-architecture/deployment.md`

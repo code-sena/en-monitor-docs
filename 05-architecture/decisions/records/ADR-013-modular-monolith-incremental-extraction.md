@@ -2,7 +2,7 @@
 
 - **ID:** ADR-013
 - **Date:** 2026-09-23
-- **Status:** Accepted
+- **Status:** Accepted — carried out in full on 2026-10-28
 - **Authors:** Juan Esteban Cortés Parra
 
 ---
@@ -39,8 +39,10 @@ module per bounded context, and extract the contexts to microservices **one at a
   (`ADR-012`) with a cache, and by consumers of its events (`ADR-008`); add the new service's
   routes to the gateway (`ADR-004`); remove the module from the backend.
 - Order followed: Security (October 2026), Devices (October 2026), Monitoring and Measurements
-  (24-Oct-2026). Home, Alerts, Recommendations and Notification remain in the backend; their
-  migration is in progress, carried out by the teammate.
+  (24-Oct-2026), then Home, Notification, Alerts and Recommendations (25 to 28-Oct-2026, carried
+  out by the teammate). With the last one, on 28-Oct-2026, the modular monolith was empty and
+  `energy-monitor-backend` was retired: it only keeps the ESP32 firmware and its history. The
+  system now has the gateway and seven microservices (`09-microservices/service-catalog.md`).
 
 **Justification:** module boundaries checked at build time give most of the design benefit of
 services, at the cost of one deployable. Because each context only depends on another one's
@@ -67,8 +69,9 @@ and the gateway keeps every public path unchanged.
 - The rest of the backend kept working unchanged during every extraction, behind the proxies
 
 **Negative / Trade-offs:**
-- Until the migration ends, the system mixes a modular monolith and microservices
-- Proxy packages add caches and fallbacks the monolith did not need
+- While the migration lasted, the system mixed a modular monolith and microservices (ended 28-Oct-2026)
+- Proxy packages added caches and fallbacks the monolith did not need; they disappeared with it, but
+  the caches between services remain
 - The shared database (`ADR-003`) remains until every context owns its own store
 
 **Impact on the system:**
@@ -83,7 +86,7 @@ and the gateway keeps every public path unchanged.
 | Risk | Probability | Impact | Mitigation |
 |------|------------|--------|-----------|
 | A module depends on another one's internals and blocks its extraction | Low | High | `ModularityTests` in the build |
-| The remaining migration is not finished by the delivery date | Medium | Medium | Each extraction is independent; the backend keeps serving the contexts not yet moved |
+| The remaining migration is not finished by the delivery date | Medium | Medium | Materialised: it finished on 28-Oct-2026, the delivery day, because each extraction was independent and the backend kept serving the contexts not yet moved |
 
 ---
 

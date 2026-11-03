@@ -14,7 +14,7 @@ repository was never created: from the first schema (September 2026) the Liquiba
 lived inside `energy-monitor-backend`, one folder per module (`db/changelog/<context>/`), and the
 backend applied them on startup.
 
-When Security, Devices and Monitoring/Measurements were extracted into their own services, their
+When the contexts were extracted into their own services (Security, Devices, Monitoring/Measurements, then Home, Notification, Alerts and Recommendations), their
 tables stayed in the same shared schema (`ADR-003-shared-database.md`) with data already in
 production. The changesets that created those tables had already been applied by the monolith
 and were recorded in `DATABASECHANGELOG`. Moving them must not make Liquibase run them a second
@@ -36,12 +36,15 @@ own application repository**, and applies only those on startup. All of them sha
 same relative path** it had in the monolith, so the changesets already applied are recognised
 and never run again.
 
-| Component | Changelog folder | Changesets (24-Oct-2026) |
+| Component | Changelog folder | Changesets (28-Oct-2026) |
 |---|---|---|
-| `en-monitor-security-service` | `db/changelog/security/` | `security-001` … `security-027` (`security-026`: `security_outbox`) |
+| `en-monitor-security-service` | `db/changelog/security/` | `security-001` … `security-030` (`security-026`: `security_outbox`) |
 | `en-monitor-device-service` | `db/changelog/device/` | `device-001` … `device-009` (`device-009`: `device_outbox`) |
 | `en-monitor-measurement-service` | `db/changelog/measurement/` | `measurement-001` … `measurement-004` (`measurement-004`: `measurement_outbox`) |
-| `energy-monitor-backend` | `db/changelog/home/`, `alert/`, `recommendation/`, `notification/` | `home-001` … `home-007` (`home-007`: `home_outbox`), `alert-*`, `recommendation-*`, `notification-*` |
+| `en-monitor-home-service` | `db/changelog/home/` | `home-001` … `home-007` (`home-007`: `home_outbox`) |
+| `en-monitor-notification-service` | `db/changelog/notification/` | `notification-001` … `notification-007` |
+| `en-monitor-alert-service` | `db/changelog/alert/` | `alert-001` … `alert-004` (`alert-004`: `alert_outbox`) |
+| `en-monitor-recommendation-service` | `db/changelog/recommendation/` | `recommendation-001`, `recommendation-002` (`recommendation_outbox`) |
 
 Rules kept from `06-data/migration-strategy.md`: forward-only changes, one changeset per logical
 change, a `rollback` block on every changeset, and ids of the form
