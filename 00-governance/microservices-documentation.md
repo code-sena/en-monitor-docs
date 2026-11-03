@@ -1,19 +1,19 @@
 # Per-Microservice Documentation Standard
 
 > Defines exactly what documents each bounded context/module must have, who writes them,
-> when they are created, and when they must be updated. Applicable to the current modular monolith
-> (Spring Modulith) and will guide the migration to microservices. Non-compliance blocks the merge.
+> when they are created, and when they must be updated. Applicable to every microservice of the system
+> (it was written for the modular monolith and guided the migration to microservices). Non-compliance
+> blocks the merge.
 
-> **Note (24-Oct-2026):** Security, Devices and Monitoring/Measurements already run as microservices
-> (`09-microservices/services/02-security-service/`, `03-device-service/`, `04-measurement-service/`), behind
-> the API gateway (`01-api-gateway/`). The modules `home`, `alert`, `recommendation` and `notification`
-> still run in the `energy-monitor-backend` modular monolith and are being migrated to microservices.
+> **Note (28-Oct-2026):** every bounded context runs as a microservice behind the API gateway
+> (`09-microservices/services/01-api-gateway/` to `08-recommendation-service/`); the modular
+> monolith `energy-monitor-backend` was retired.
 
 ---
 
 ## Required structure for each bounded context/module
 
-For each bounded context (backend module), the following documentation should be maintained:
+For each bounded context (microservice), the following documentation should be maintained:
 
 ```
 09-microservices/services/NN-module-name/  (or module-specific docs under 02-domain/05-architecture as appropriate)

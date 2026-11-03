@@ -8,7 +8,7 @@
 ## Project Context
 
 Energy Monitor is a system for monitoring electrical energy consumption with:
-- **Backend (24-Oct-2026):** an API gateway (`en-monitor-api-gateway`) in front of three microservices — `en-monitor-security-service`, `en-monitor-device-service`, `en-monitor-measurement-service` — and of `energy-monitor-backend`, a Spring Modulith modular monolith that still holds `home`, `alert`, `recommendation` and `notification` (their migration to microservices is in progress). Everything uses Domain-Driven Design (DDD) and Hexagonal Architecture (ports & adapters); one bounded context per service or module.
+- **Backend (28-Oct-2026):** an API gateway (`en-monitor-api-gateway`) in front of seven microservices — `en-monitor-security-service`, `en-monitor-device-service`, `en-monitor-measurement-service`, `en-monitor-home-service`, `en-monitor-notification-service`, `en-monitor-alert-service` and `en-monitor-recommendation-service`. Everything uses Domain-Driven Design (DDD) and Hexagonal Architecture (ports & adapters); one bounded context per service.
 - **Frontend Web:** React + Vite (TypeScript/JavaScript)
 - **Frontend Mobile:** React Native + Expo (TypeScript), Android
 
